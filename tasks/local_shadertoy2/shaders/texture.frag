@@ -1,10 +1,7 @@
 #version 450
+#extension GL_ARB_separate_shader_objects : enable
 
-layout(location = 0) out vec4 out_fragColor;
-
-layout(location = 0) in VS_OUT {
-  vec2 pos;
-} surf;
+layout(location = 0) out vec4 outColor;
 
 layout(push_constant) uniform params {
     uint resolutionX;
@@ -47,8 +44,8 @@ float noise(vec2 st) {
            (d - b) * u.x * u.y;
 }
 
-void main() { 
-    vec2 uv = surf.pos * 0.01 - 1.0;
+void main() {
+    vec2 uv = gl_FragCoord.xy * 0.01 - 1.0;
     uv.x *= iResolution().x / iResolution().y;
     
     float time = iTime() * 0.8;
@@ -68,5 +65,5 @@ void main() {
     color += vec3(glow * 0.3) * vec3(1.0, 0.5, 0.2);
     color = mix(color, color * color, 0.7);
     
-    out_fragColor = vec4(color, 1.0);
+    outColor = vec4(color, 1.0);
 }

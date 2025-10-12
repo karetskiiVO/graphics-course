@@ -33,11 +33,12 @@ private:
     std::unique_ptr<etna::Window> vkWindow;
     std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 
-    etna::Image result;
-    etna::GraphicsPipeline texturePipeline;
-    etna::GraphicsPipeline renderPipeline;
-    etna::Sampler sampler;
+    etna::Image image;
     etna::Image texture;
+    
+    etna::GraphicsPipeline texturePipeline;
+    etna::GraphicsPipeline graphicsPipeline;
+    etna::Sampler sampler;
 
     struct PushConstants {
         uint32_t resolutionX, resolutionY;
