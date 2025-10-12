@@ -79,19 +79,43 @@ App::App()
 
     // TODO: Initialize any additional resources you require here!
     etna::create_program(
-        "local shadertoy", 
-        {LOCAL_SHADERTOY2_SHADERS_ROOT "toy.frag.spv", LOCAL_SHADERTOY2_SHADERS_ROOT "toy.vert.spv"}
+        "texture program",
+        {
+            LOCAL_SHADERTOY2_SHADERS_ROOT "texture.frag.spv", 
+            LOCAL_SHADERTOY2_SHADERS_ROOT "toy.vert.spv",
+        }
+    );
+    etna::create_program(
+        "render program", 
+        {
+            LOCAL_SHADERTOY2_SHADERS_ROOT "toy.frag.spv", 
+            LOCAL_SHADERTOY2_SHADERS_ROOT "toy.vert.spv",
+        }
     );
 
-    pipeline = context.getPipelineManager().createGraphicsPipeline(
-        "local shadertoy",
+    texturePipeline = context.getPipelineManager().createGraphicsPipeline(
+        "texture program",
         etna::GraphicsPipeline::CreateInfo{
         .fragmentShaderOutput = {
             .colorAttachmentFormats = {vkWindow->getCurrentFormat()},
             .depthAttachmentFormat = vk::Format::eD32Sfloat,
         },
     });
+    texture = etna::get_context().createImage({
+        .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+        .name = "textureImage",
+        .format = vkWindow->getCurrentFormat(),
+        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+    });
 
+    renderPipeline = context.getPipelineManager().createGraphicsPipeline(
+        "render program",
+        etna::GraphicsPipeline::CreateInfo{
+        .fragmentShaderOutput = {
+            .colorAttachmentFormats = {vkWindow->getCurrentFormat()},
+            .depthAttachmentFormat = vk::Format::eD32Sfloat,
+        },
+    });
     sampler = etna::Sampler({
         .filter = vk::Filter::eLinear,
         .addressMode = vk::SamplerAddressMode::eRepeat,
@@ -152,41 +176,84 @@ void App::drawFrame()
 
         ETNA_CHECK_VK_RESULT(currentCmdBuf.begin(vk::CommandBufferBeginInfo{}));
         {
-            // First of all, we need to "initialize" th "backbuffer", aka the current swapchain
-            // image, into a state that is appropriate for us working with it. The initial state
-            // is considered to be "undefined" (aka "I contain trash memory"), by the way.
-            // "Transfer" in vulkanese means "copy or blit".
-            // Note that Etna sometimes calls this for you to make life simpler, read Etna's code!
             etna::set_state(
                 currentCmdBuf,
                 backbuffer,
-                // We are going to use the texture at the transfer stage...
-                vk::PipelineStageFlagBits2::eTransfer,
-                // ...to transfer-write stuff into it...
-                vk::AccessFlagBits2::eTransferWrite,
-                // ...and want it to have the appropriate layout.
-                vk::ImageLayout::eTransferDstOptimal,
+                vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                vk::AccessFlagBits2::eColorAttachmentWrite,
+                vk::ImageLayout::eColorAttachmentOptimal,
                 vk::ImageAspectFlagBits::eColor
             );
-            // The set_state doesn't actually record any commands, they are deferred to
-            // the moment you call flush_barriers.
-            // As with set_state, Etna sometimes flushes on it's own.
-            // Usually, flushes should be placed before "action", i.e. compute dispatches
-            // and blit/copy operations.
+        
             etna::flush_barriers(currentCmdBuf);
 
-            // TODO: Record your commands here!
             {
                 auto state = etna::RenderTargetState{
                     currentCmdBuf, 
-                    {{}, {resolution.x, resolution.y}}, {{backbuffer, backbufferView}}, 
-                    {},
+                    {{0, 0}, {100, 100}}, 
+                    {}, 
+                    {}
+                };
+                etna::get_shader_program("texture program");
+
+                currentCmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, texturePipeline.getVkPipeline());
+
+                currentCmdBuf.draw(3, 1, 0, 0);
+            }
+
+            etna::set_state(
+                currentCmdBuf,
+                backbuffer,
+                vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                vk::AccessFlagBits2::eColorAttachmentWrite,
+                vk::ImageLayout::eColorAttachmentOptimal,
+                vk::ImageAspectFlagBits::eColor
+            );
+
+            etna::set_state(
+                currentCmdBuf,
+                texture.get(),
+                vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                vk::AccessFlagBits2::eColorAttachmentWrite,
+                vk::ImageLayout::eColorAttachmentOptimal,
+                vk::ImageAspectFlagBits::eColor
+            );
+
+            etna::flush_barriers(currentCmdBuf);
+
+            {
+                auto state = etna::RenderTargetState{
+                    currentCmdBuf, 
+                    {{}, {resolution.x, resolution.y}}, 
+                    {{backbuffer, backbufferView}}, 
+                    {}
                 };
 
-                currentCmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.getVkPipeline());
+                auto set = etna::create_descriptor_set(
+                    etna::get_shader_program("render program").getDescriptorLayoutId(0),
+                    currentCmdBuf,
+                    {
+                        etna::Binding{1, texture.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+                    }
+                );
+                vk::DescriptorSet vkSet = set.getVkSet();
+
+                currentCmdBuf.bindPipeline(
+                    vk::PipelineBindPoint::eGraphics, 
+                    renderPipeline.getVkPipeline()
+                );
+                currentCmdBuf.bindDescriptorSets(
+                    vk::PipelineBindPoint::eGraphics, 
+                    renderPipeline.getVkPipelineLayout(), 
+                    0, 
+                    1, 
+                    &vkSet, 
+                    0, 
+                    nullptr
+                );
 
                 currentCmdBuf.pushConstants(
-                    pipeline.getVkPipelineLayout(),
+                    renderPipeline.getVkPipelineLayout(),
                     vk::ShaderStageFlagBits::eFragment,
                     0,
                     sizeof(pushConstants),

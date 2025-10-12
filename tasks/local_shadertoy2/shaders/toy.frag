@@ -2,6 +2,11 @@
 
 layout(location = 0) out vec4 out_fragColor;
 
+layout(location = 0) in VS_OUT {
+    vec2 pos;
+} surf;
+layout(binding = 1) uniform sampler2D shaderImage;
+
 layout(push_constant) uniform params {
     uint resolutionX;
     uint resolutionY;
@@ -9,10 +14,6 @@ layout(push_constant) uniform params {
     float mouseY;
     float time;
 } env;
-
-layout(location = 0) in VS_OUT {
-  vec2 wPos;
-} surf;
 
 float iTime() {
   return env.time;
@@ -232,7 +233,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 }
 
 void main() {
-    vec2 pos = surf.wPos / 2.0 + vec2(0.5);
+    vec2 pos = surf.pos / 2.0 + vec2(0.5);
     pos.y = 1.0 - pos.y;
     pos = pos * vec2(iResolution());
 
