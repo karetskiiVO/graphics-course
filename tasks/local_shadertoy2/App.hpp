@@ -34,7 +34,7 @@ private:
     std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 
     etna::Image image;
-    etna::Image texture;
+    etna::Image texture_;
     
     etna::GraphicsPipeline texturePipeline;
     etna::GraphicsPipeline graphicsPipeline;

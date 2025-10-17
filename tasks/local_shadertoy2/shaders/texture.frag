@@ -45,7 +45,7 @@ float noise(vec2 st) {
 }
 
 void main() {
-    vec2 uv = gl_FragCoord.xy * 0.01 - 1.0;
+    vec2 uv = gl_FragCoord.xy * 0.1 - 1.0;
     uv.x *= iResolution().x / iResolution().y;
     
     float time = iTime() * 0.8;

@@ -256,7 +256,7 @@ void App::drawFrame()
                     currentCmdBuf,
                     {
                         etna::Binding{0, image.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-                        etna::Binding{1, texture.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}
+                        etna::Binding{1, texture_.genBinding(sampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)}
                     }
                 );
 
