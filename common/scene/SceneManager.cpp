@@ -439,6 +439,8 @@ SceneManager::ProcessedCompressedMeshes SceneManager::processCompressedMeshes(co
       reinterpret_cast<const uint32_t*>(&model.buffers[0].data.front()), 
       model.bufferViews[0].byteLength / sizeof(uint32_t),
     },
+    .renderElems = {},
+    .meshes      = {}.
   };
 
   for (const auto& mesh : model.meshes) {
