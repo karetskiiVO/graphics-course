@@ -440,7 +440,7 @@ SceneManager::ProcessedCompressedMeshes SceneManager::processCompressedMeshes(co
       model.bufferViews[0].byteLength / sizeof(uint32_t),
     },
     .renderElems = {},
-    .meshes      = {}.
+    .meshes      = {},
   };
 
   for (const auto& mesh : model.meshes) {
