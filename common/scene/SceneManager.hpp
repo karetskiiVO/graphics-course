@@ -42,6 +42,11 @@ struct Mesh
   std::uint32_t relemCount;
 };
 
+struct Bounds {
+  glm::vec3 origin;
+  glm::vec3 extents;
+};
+
 class SceneManager
 {
 public:
@@ -59,6 +64,7 @@ public:
 
   // Every relem is a single draw call
   std::span<const RenderElement> getRenderElements() { return renderElements; }
+  std::span<const Bounds> getRenderElementsBounds() { return bounds; }
 
   vk::Buffer getVertexBuffer() { return unifiedVbuf.get(); }
   vk::Buffer getIndexBuffer() { return unifiedIbuf.get(); }
@@ -101,6 +107,8 @@ private:
     CSlice<uint32_t> indices;
     RenderVec        renderElems;
     MeshVec          meshes;
+    
+    std::vector<Bounds> bounds;
   };
 
   ProcessedMeshes processMeshes(const tinygltf::Model& model) const;
@@ -113,6 +121,7 @@ private:
   etna::BlockingTransferHelper transferHelper;
 
   std::vector<RenderElement> renderElements;
+  std::vector<Bounds> bounds;
   std::vector<Mesh> meshes;
   std::vector<glm::mat4x4> instanceMatrices;
   std::vector<std::uint32_t> instanceMeshes;

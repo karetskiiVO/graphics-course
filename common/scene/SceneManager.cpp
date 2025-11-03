@@ -420,10 +420,11 @@ void SceneManager::selectScene(std::filesystem::path path, bool compressed)
 
     uploadData(verts, inds);
   } else {
-    auto [vertices, indices, relems, meshs] = processCompressedMeshes(model);
+    auto [vertices, indices, relems, meshs, bunds] = processCompressedMeshes(model);
 
     renderElements = std::move(relems);
     meshes = std::move(meshs);
+    bounds = std::move(bunds);
 
     uploadCompressedData(indices, vertices);
   }
@@ -439,20 +440,61 @@ SceneManager::ProcessedCompressedMeshes SceneManager::processCompressedMeshes(co
       reinterpret_cast<const uint32_t*>(&model.buffers[0].data.front()), 
       model.bufferViews[0].byteLength / sizeof(uint32_t),
     },
+    .renderElems = {},
+    .meshes      = {},
+    .bounds      = {},
   };
 
   for (const auto& mesh : model.meshes) {
+    auto minpos = glm::vec3{
+      std::numeric_limits<float>::max(),
+      std::numeric_limits<float>::max(),
+      std::numeric_limits<float>::max(),
+    };
+    auto maxpos = glm::vec3{
+      std::numeric_limits<float>::min(),
+      std::numeric_limits<float>::min(),
+      std::numeric_limits<float>::min(),
+    };
+
     result.meshes.push_back({
       .firstRelem = static_cast<uint32_t>(result.renderElems.size()),
       .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
     });
 
-    for (const auto& prim : mesh.primitives)
+    for (auto& prim : mesh.primitives) {
+      auto& idxAcc = model.accessors.at(prim.indices);
+      auto& vertAcc = model.accessors.at(prim.attributes.at("POSITION"));
+
       result.renderElems.push_back({
-        .vertexOffset = static_cast<uint32_t>(model.accessors.at(prim.attributes.at("POSITION")).byteOffset / 32),
-        .indexOffset  = static_cast<uint32_t>(model.accessors.at(prim.indices).byteOffset / sizeof(uint32_t)),
-        .indexCount   = static_cast<uint32_t>(model.accessors.at(prim.indices).count),
+        .vertexOffset = static_cast<uint32_t>(vertAcc.byteOffset / 32),
+        .indexOffset  = static_cast<uint32_t>(idxAcc.byteOffset / sizeof(uint32_t)),
+        .indexCount   = static_cast<uint32_t>(idxAcc.count),
       });
+      
+      auto view = model.bufferViews[vertAcc.bufferView];
+      auto posBuf = reinterpret_cast<const uint8_t*>(model.buffers[view.buffer].data.data()) + view.byteOffset + vertAcc.byteOffset;
+      auto positionStride = view.byteStride;
+      if (positionStride == 0) {
+        positionStride = tinygltf::GetComponentSizeInBytes(vertAcc.componentType) *
+          tinygltf::GetNumComponentsInType(vertAcc.type);
+      }
+
+      for (std::size_t i = 0; i < vertAcc.count; i++) {
+        glm::vec3 pos;
+        std::memcpy(&pos, posBuf, sizeof(pos));
+
+        minpos = glm::min(minpos, pos);
+        maxpos = glm::max(maxpos, pos);
+
+        posBuf += positionStride;
+      }
+
+      result.bounds.push_back({
+        .origin  = (maxpos + minpos) / 2.0f,
+        .extents = (maxpos - minpos) / 2.0f,
+      });
+    }
   }
 
   return result;
