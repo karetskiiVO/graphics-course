@@ -125,11 +125,11 @@ App::App()
 
     VkDeviceSize imageSize = w * h * 4;
 
-    assert(!pixels && "failed to load texture image!");
+    assert(pixels && "failed to load texture image!");
 
-    auto texture = etna::get_context().createImage(etna::Image::CreateInfo{
+    texture_ = etna::get_context().createImage(etna::Image::CreateInfo{
         .extent = vk::Extent3D{static_cast<uint32_t>(w), static_cast<uint32_t>(h), 1},
-        .name = "texture",
+        .name = "texture_",
         .format = vk::Format::eR8G8B8A8Unorm,
         .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst
     });
@@ -139,8 +139,8 @@ App::App()
         etna::BlockingTransferHelper::CreateInfo{.stagingSize = static_cast<std::uint64_t>(imageSize)}
     };
     blockingTransferHelper.uploadImage(
-        *oneShotCmdMgr, 
-        texture, 
+        *oneShotCmdMgr,
+        texture_, 
         0, 
         0,
         std::span<const std::byte>(reinterpret_cast<const std::byte*>(pixels), imageSize)
