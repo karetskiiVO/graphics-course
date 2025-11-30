@@ -4,7 +4,7 @@
 
 #include <etna/Window.hpp>
 #include <etna/PerFrameCmdMgr.hpp>
-#include <etna/ComputePipeline.hpp>
+#include <etna/GraphicsPipeline.hpp>
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
 
@@ -33,9 +33,12 @@ private:
     std::unique_ptr<etna::Window> vkWindow;
     std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 
+    etna::Image image;
+    etna::Image texture_;
+    
+    etna::GraphicsPipeline texturePipeline;
+    etna::GraphicsPipeline graphicsPipeline;
     etna::Sampler sampler;
-    etna::Image result;
-    etna::ComputePipeline pipeline;
 
     struct PushConstants {
         uint32_t resolutionX, resolutionY;
