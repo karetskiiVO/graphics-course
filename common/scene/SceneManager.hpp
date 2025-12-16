@@ -8,6 +8,19 @@
 #include <etna/BlockingTransferHelper.hpp>
 #include <etna/VertexInput.hpp>
 
+template<typename T>
+struct CSlice {
+  const T* ptr;
+  size_t len;
+
+  size_t ByteLen() const {
+    return len * sizeof(T);
+  }
+
+  std::vector<T> Vec() const {
+    return std::vector<T>(ptr, ptr+len);
+  }
+};
 
 // A single render element (relem) corresponds to a single draw call
 // of a certain pipeline with specific bindings (including material data)
@@ -29,12 +42,17 @@ struct Mesh
   std::uint32_t relemCount;
 };
 
+struct Bounds {
+  glm::vec3 origin;
+  glm::vec3 extents;
+};
+
 class SceneManager
 {
 public:
   SceneManager();
 
-  void selectScene(std::filesystem::path path);
+  void selectScene(std::filesystem::path path, bool compressed = false);
 
   // Every instance is a mesh drawn with a certain transform
   // NOTE: maybe you can pass some additional data through unused matrix entries?
@@ -46,11 +64,13 @@ public:
 
   // Every relem is a single draw call
   std::span<const RenderElement> getRenderElements() { return renderElements; }
+  std::span<const Bounds> getRenderElementsBounds() { return bounds; }
 
   vk::Buffer getVertexBuffer() { return unifiedVbuf.get(); }
   vk::Buffer getIndexBuffer() { return unifiedIbuf.get(); }
 
   etna::VertexByteStreamFormatDescription getVertexFormatDescription();
+  etna::VertexByteStreamFormatDescription getCompressedVertexFormatDescription();
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
@@ -73,22 +93,35 @@ private:
 
   static_assert(sizeof(Vertex) == sizeof(float) * 8);
 
-  struct ProcessedMeshes
-  {
+  struct ProcessedMeshes {
     std::vector<Vertex> vertices;
     std::vector<std::uint32_t> indices;
     std::vector<RenderElement> relems;
     std::vector<Mesh> meshes;
   };
-  ProcessedMeshes processMeshes(const tinygltf::Model& model) const;
-  void uploadData(std::span<const Vertex> vertices, std::span<const std::uint32_t>);
+  struct ProcessedCompressedMeshes {
+    using RenderVec = std::vector<RenderElement>;
+    using MeshVec = std::vector<Mesh>;
 
+    CSlice<uint8_t>  vertices;
+    CSlice<uint32_t> indices;
+    RenderVec        renderElems;
+    MeshVec          meshes;
+    
+    std::vector<Bounds> bounds;
+  };
+
+  ProcessedMeshes processMeshes(const tinygltf::Model& model) const;
+  ProcessedCompressedMeshes processCompressedMeshes(const tinygltf::Model& model);
+  void uploadData(std::span<const Vertex> vertices, std::span<const std::uint32_t>);
+  void uploadCompressedData(CSlice<uint32_t> indices, CSlice<uint8_t> vertices);
 private:
   tinygltf::TinyGLTF loader;
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
   etna::BlockingTransferHelper transferHelper;
 
   std::vector<RenderElement> renderElements;
+  std::vector<Bounds> bounds;
   std::vector<Mesh> meshes;
   std::vector<glm::mat4x4> instanceMatrices;
   std::vector<std::uint32_t> instanceMeshes;

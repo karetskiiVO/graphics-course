@@ -4,12 +4,13 @@
 
 #include <etna/Window.hpp>
 #include <etna/PerFrameCmdMgr.hpp>
-#include <etna/ComputePipeline.hpp>
+#include <etna/GraphicsPipeline.hpp>
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
 
 #include "wsi/OsWindowingManager.hpp"
 
+constexpr uint32_t NumFramesInFlight = 3;
 
 class App
 {
@@ -33,16 +34,32 @@ private:
     std::unique_ptr<etna::Window> vkWindow;
     std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 
+    etna::Image image;
+    etna::Image texture_;
+    
+    etna::GraphicsPipeline texturePipeline;
+    etna::GraphicsPipeline graphicsPipeline;
     etna::Sampler sampler;
-    etna::Image result;
-    etna::ComputePipeline pipeline;
 
-    struct PushConstants {
+    struct UniformParams {
         uint32_t resolutionX, resolutionY;
         float mouseX, mouseY;
         float time;
     };
 
-    PushConstants pushConstants;
+    UniformParams params;
     std::chrono::steady_clock::time_point start;
+
+    class FrameIter {
+        std::array<etna::Buffer, NumFramesInFlight> buff;
+        size_t iter = 0;
+    public:
+        etna::Buffer& next() {
+            auto& res = buff[iter];
+            iter = (iter + 1) % buff.size();
+            return res;
+        }
+    };
+
+    FrameIter frameIter;
 };
