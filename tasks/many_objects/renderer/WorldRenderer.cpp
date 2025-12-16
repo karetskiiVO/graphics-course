@@ -13,8 +13,8 @@
 
 WorldRenderer::WorldRenderer() :
   sceneMgr{std::make_unique<SceneManager>()},
-  instancesBatch(maxInstanceCount, 0),
-  instanceTransformBuffer()
+  instanceTransformBuffer(),
+  instancesBatch(maxInstanceCount, 0)
 {
 }
 
