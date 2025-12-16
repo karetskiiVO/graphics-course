@@ -1,1 +1,1 @@
-go build -o baker .\tasks\model_bakery\baker\
+go build -o baker ./tasks/model_bakery/baker
