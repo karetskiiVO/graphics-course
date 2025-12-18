@@ -6,7 +6,6 @@
 #include <etna/Profiling.hpp>
 #include <glm/ext.hpp>
 
-
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
 {
@@ -28,7 +27,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
 void WorldRenderer::loadScene(std::filesystem::path path)
 {
-  sceneMgr->selectScene(path);
+  sceneMgr->selectScene(path, true);
 }
 
 void WorldRenderer::loadShaders()
@@ -44,7 +43,7 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 {
   etna::VertexShaderInputDescription sceneVertexInputDesc{
     .bindings = {etna::VertexShaderInputDescription::Binding{
-      .byteStreamDescription = sceneMgr->getVertexFormatDescription(),
+      .byteStreamDescription = sceneMgr->getCompressedVertexFormatDescription(),
     }},
   };
 
