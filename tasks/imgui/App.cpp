@@ -2,6 +2,8 @@
 
 #include <tracy/Tracy.hpp>
 
+#include "gui/ImGuiRenderer.hpp"
+
 App::App () {
     glm::uvec2 initialRes = {1280, 720};
     mainWindow = windowing.createWindow(OsWindow::CreateInfo{.resolution = initialRes,});
@@ -14,6 +16,8 @@ App::App () {
     auto surface = mainWindow->createVkSurface(etna::get_context().getInstance());
 
     renderer->InitFrameDelivery(std::move(surface), [this] () { return mainWindow->getResolution(); });
+
+    ImGuiRenderer::enableImGuiForWindow(mainWindow->native());
 
     mainCam.lookAt({0, 50, 50}, {0, 0, 0}, {0, 1, 0});
 }

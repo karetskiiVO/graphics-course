@@ -6,6 +6,7 @@
 #include <etna/RenderTargetStates.hpp>
 
 #include <glm/ext.hpp>
+#include <imgui.h>
 
 #include "TerrainGenerator.hpp"
 
@@ -90,6 +91,44 @@ void WorldRenderer::update (const FramePacket& packet) {
 
     const float aspect = float(resolution.x) / float(resolution.y);
     viewProj = packet.mainCam.projTm(aspect) * packet.mainCam.viewTm();
+}
+
+void WorldRenderer::drawGui () {
+    ImGui::Begin("Terrain Settings");
+
+    ImGui::Text("Terrain Generation");
+    ImGui::Separator();
+
+    static int octaves = 6;
+    if (ImGui::SliderInt("Octaves", &octaves, 1, 12)) {}
+
+    if (ImGui::Button("Regenerate Terrain")) {
+        heightMap = terrainGen->GenerateHeightMap(4096, 4096, octaves);
+        spdlog::info("Terrain regenerated with {} octaves", octaves);
+    }
+
+    ImGui::NewLine();
+    ImGui::Text("Terrain Rendering");
+    ImGui::Separator();
+
+    ImGui::SliderFloat("Height Scale", &heightScale, 0.0f, 200.0f);
+    ImGui::SliderFloat("Tessellation Factor", &tessellationFactor, 1.0f, 128.0f);
+    ImGui::SliderFloat("Chunk Size", &chunkSize, 10.0f, 500.0f);
+    ImGui::SliderInt("Grid Size", &gridSize, 1, 20);
+
+    ImGui::NewLine();
+    ImGui::Text(
+        "Application average %.3f ms/frame (%.1f FPS)",
+        1000.0f / ImGui::GetIO().Framerate,
+        ImGui::GetIO().Framerate);
+
+    ImGui::NewLine();
+    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Controls:");
+    ImGui::Text("T - Toggle wireframe mode");
+    ImGui::Text("Arrow Keys - Adjust tessellation/height");
+    ImGui::Text("B - Recompile and reload shaders");
+
+    ImGui::End();
 }
 
 void WorldRenderer::renderTerrain (vk::CommandBuffer cmd_buf) {

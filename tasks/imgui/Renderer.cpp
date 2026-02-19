@@ -5,6 +5,9 @@
 #include <etna/RenderTargetStates.hpp>
 #include <etna/PipelineManager.hpp>
 #include <etna/Profiling.hpp>
+#include <imgui.h>
+
+#include <gui/ImGuiRenderer.hpp>
 
 Renderer::Renderer (glm::uvec2 res)
     : resolution{res} {}
@@ -55,6 +58,8 @@ void Renderer::InitFrameDelivery (vk::UniqueSurfaceKHR surface, ResolutionProvid
     worldRenderer->allocateResources(resolution);
     worldRenderer->loadShaders();
     worldRenderer->setupPipelines(window->getCurrentFormat());
+
+    guiRenderer = std::make_unique<ImGuiRenderer>(window->getCurrentFormat());
 }
 
 void Renderer::DebugInput (const Keyboard& kb) {
@@ -77,6 +82,14 @@ void Renderer::Update (const FramePacket& packet) { worldRenderer->update(packet
 void Renderer::DrawFrame () {
     ZoneScoped;
 
+    {
+        ZoneScopedN("drawGui");
+        guiRenderer->nextFrame();
+        ImGui::NewFrame();
+        worldRenderer->drawGui();
+        ImGui::Render();
+    }
+
     auto currentCmdBuf = commandManager->acquireNext();
 
     etna::begin_frame();
@@ -91,6 +104,12 @@ void Renderer::DrawFrame () {
             ETNA_PROFILE_GPU(currentCmdBuf, renderFrame);
 
             worldRenderer->renderWorld(currentCmdBuf, image, view);
+
+            {
+                ImDrawData* pDrawData = ImGui::GetDrawData();
+                guiRenderer->render(
+                    currentCmdBuf, {{0, 0}, {resolution.x, resolution.y}}, image, view, pDrawData);
+            }
 
             etna::set_state(
                 currentCmdBuf,
