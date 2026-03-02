@@ -1,8 +1,9 @@
-#version 430
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
 
-layout(local_size_x = 32, local_size_y = 32) in;
-
-layout(binding = 0, rgba8) uniform image2D resultImage;
+layout(location = 0) out vec4 outColor;
+layout(binding = 0) uniform sampler2D iChannel1;
+layout(binding = 1) uniform sampler2D iChannel2;
 
 layout(push_constant) uniform params {
     uint resolutionX;
@@ -175,13 +176,18 @@ mat3 rotateZ(float theta) {
     );
 }
 
-vec4 calclight(
+vec3 triplanarWeights (in vec3 n) {
+    vec3 w = abs(n);
+    w *= w;
+
+    return w / (w.x + w.y + w.z);
+}
+
+vec4 calclight (
     in vec3 materialpoint, 
     in vec3 norm,
     in vec3 light,
-    in vec3 view,
-    in vec4 color,
-    in vec4 backcolor
+    in vec3 view
 ) {
     vec3 l = normalize(light - materialpoint);
     vec3 v = normalize(view - materialpoint);
@@ -190,10 +196,13 @@ vec4 calclight(
     float nl = max(0.0, dot(norm, l));
     float bl = pow(max(0.0, dot(vl, norm)), 20.0);
 
-    return min(
-        (color - backcolor) * (nl + bl) + backcolor,
-        vec4(1, 1, 1, 1)
-    );
+    vec4 cx = texture(iChannel2, materialpoint.yz);
+    vec4 cy = texture(iChannel2, materialpoint.zx);
+    vec4 cz = texture(iChannel2, materialpoint.xy);
+
+    vec3 tw = triplanarWeights(norm);
+
+    return (0.8 * nl + 0.4 * bl) * (tw.x * cx + tw.y + cy + tw.z * cz);
 }
 
 const vec3 eye   = vec3(0, 0, 5);
@@ -220,24 +229,19 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
             hit,
             n,
             light,
-            eye,
-            vec4(0.6, 0.53, 0.53, 1.0),
-            vec4(0, 0, 0, 1)
+            eye
         );
+    } else {
+        color = texture(iChannel1, fragCoord);
     }
 
     fragColor = color;
 }
 
-void main () {
-    ivec2 uv = ivec2(gl_GlobalInvocationID.xy);
-    
-    // TODO: Put your shadertoy code here!
-    // Simple gradient as a test.
-    if (uv.x < iResolution().x && uv.y < iResolution().y) {
-        vec4 color;
-    
-        mainImage(color, uv);
-        imageStore(resultImage, uv, color);
-    }
+void main() {
+    vec2 scale = 3.0 * iResolution().xy / max(iResolution().x, iResolution().y);
+    vec2 uv = scale * (gl_FragCoord.xy / iResolution().xy - vec2(0.25, 0.25)) * iResolution().xy;
+
+    mainImage(outColor, uv);
 }
+
