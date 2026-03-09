@@ -301,10 +301,34 @@ SceneManager::ProcessedMeshes SceneManager::processMeshes(const tinygltf::Model&
 
         // NOTE: it's faster to do a template here with specializations for all combinations than to
         // do ifs at runtime. Also, SIMD should be used. Try implementing this!
-        if (hasNormals)
-          std::memcpy(&normal, ptrs[2], sizeof(normal));
-        if (hasTangents)
-          std::memcpy(&tangent, ptrs[3], sizeof(tangent));
+        if (hasNormals) {
+          switch (accessors[2]->componentType) {
+          case TINYGLTF_COMPONENT_TYPE_FLOAT:
+            std::memcpy(&normal, ptrs[2], sizeof(normal));
+            break;
+          case TINYGLTF_COMPONENT_TYPE_BYTE:
+            normal = {
+              static_cast<float>(static_cast<int8_t>(*(ptrs[2] + 0))) / 127.0f,
+              static_cast<float>(static_cast<int8_t>(*(ptrs[2] + 1))) / 127.0f,
+              static_cast<float>(static_cast<int8_t>(*(ptrs[2] + 2))) / 127.0f,
+            };
+            break;
+          }        
+        }
+        if (hasTangents) {
+          switch (accessors[3]->componentType) {
+          case TINYGLTF_COMPONENT_TYPE_FLOAT:
+            std::memcpy(&tangent, ptrs[3], sizeof(tangent));
+            break;
+          case TINYGLTF_COMPONENT_TYPE_BYTE:
+            tangent = {
+              static_cast<float>(static_cast<int8_t>(*(ptrs[3] + 0))) / 127.0f,
+              static_cast<float>(static_cast<int8_t>(*(ptrs[3] + 1))) / 127.0f,
+              static_cast<float>(static_cast<int8_t>(*(ptrs[3] + 2))) / 127.0f,
+            };
+            break;
+          }    
+        }
         if (hasTexcoord)
           std::memcpy(&texcoord, ptrs[4], sizeof(texcoord));
 
@@ -371,7 +395,7 @@ void SceneManager::uploadData(
   transferHelper.uploadBuffer<std::uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
 }
 
-void SceneManager::selectScene(std::filesystem::path path)
+void SceneManager::selectScene(std::filesystem::path path, bool compressed)
 {
   auto maybeModel = loadModel(path);
   if (!maybeModel.has_value())
@@ -388,12 +412,71 @@ void SceneManager::selectScene(std::filesystem::path path)
   instanceMatrices = std::move(instMats);
   instanceMeshes = std::move(instMeshes);
 
-  auto [verts, inds, relems, meshs] = processMeshes(model);
+  if (!compressed) {
+    auto [verts, inds, relems, meshs] = processMeshes(model);
 
-  renderElements = std::move(relems);
-  meshes = std::move(meshs);
+    renderElements = std::move(relems);
+    meshes = std::move(meshs);
 
-  uploadData(verts, inds);
+    uploadData(verts, inds);
+  } else {
+    auto [vertices, indices, relems, meshs] = processCompressedMeshes(model);
+
+    renderElements = std::move(relems);
+    meshes = std::move(meshs);
+
+    uploadCompressedData(indices, vertices);
+  }
+}
+
+SceneManager::ProcessedCompressedMeshes SceneManager::processCompressedMeshes(const tinygltf::Model& model) {
+  auto result = ProcessedCompressedMeshes{
+    .vertices = {
+      &model.buffers[0].data.front() + model.bufferViews[1].byteOffset,
+      model.bufferViews[1].byteLength,
+    },
+    .indices = {
+      reinterpret_cast<const uint32_t*>(&model.buffers[0].data.front()), 
+      model.bufferViews[0].byteLength / sizeof(uint32_t),
+    },
+    .renderElems = {},
+    .meshes      = {},
+  };
+
+  for (const auto& mesh : model.meshes) {
+    result.meshes.push_back({
+      .firstRelem = static_cast<uint32_t>(result.renderElems.size()),
+      .relemCount = static_cast<uint32_t>(mesh.primitives.size()),
+    });
+
+    for (const auto& prim : mesh.primitives)
+      result.renderElems.push_back({
+        .vertexOffset = static_cast<uint32_t>(model.accessors.at(prim.attributes.at("POSITION")).byteOffset / 32),
+        .indexOffset  = static_cast<uint32_t>(model.accessors.at(prim.indices).byteOffset / sizeof(uint32_t)),
+        .indexCount   = static_cast<uint32_t>(model.accessors.at(prim.indices).count),
+      });
+  }
+
+  return result;
+}
+
+void SceneManager::uploadCompressedData(CSlice<uint32_t> indices, CSlice<uint8_t> vertices) {
+  unifiedVbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = vertices.ByteLen(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "unifiedVbuf",
+  });
+
+  unifiedIbuf = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = indices.ByteLen(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "unifiedIbuf",
+  });
+
+  transferHelper.uploadBuffer<unsigned char>(*oneShotCommands, unifiedVbuf, 0, vertices.Vec());
+  transferHelper.uploadBuffer<std::uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices.Vec());
 }
 
 etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription()
@@ -408,6 +491,29 @@ etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription
       etna::VertexByteStreamFormatDescription::Attribute{
         .format = vk::Format::eR32G32B32A32Sfloat,
         .offset = sizeof(glm::vec4),
+      },
+    }};
+}
+
+etna::VertexByteStreamFormatDescription SceneManager::getCompressedVertexFormatDescription() {
+  return etna::VertexByteStreamFormatDescription{
+    .stride = sizeof(Vertex),
+    .attributes = {
+      etna::VertexByteStreamFormatDescription::Attribute{
+        .format = vk::Format::eR32G32B32Sfloat,
+        .offset = 0,
+      },
+      etna::VertexByteStreamFormatDescription::Attribute{
+        .format = vk::Format::eR8G8B8Sint,
+        .offset = 12,
+      },
+      etna::VertexByteStreamFormatDescription::Attribute{
+        .format = vk::Format::eR32G32Sfloat,
+        .offset = 16,
+      },
+      etna::VertexByteStreamFormatDescription::Attribute{
+        .format = vk::Format::eR8G8B8Sint,
+        .offset = 24,
       },
     }};
 }

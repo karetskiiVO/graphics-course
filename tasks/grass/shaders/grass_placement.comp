@@ -1,0 +1,108 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+struct GrassInstance {
+    float posX;
+    float posY;
+    float posZ;
+    float rotation;
+    float scale;
+    float pad0;
+    float pad1;
+    float pad2;
+};
+
+layout(set = 0, binding = 0) restrict writeonly buffer GrassInstanceBuf {
+    GrassInstance instances[];
+};
+
+layout(set = 0, binding = 1) restrict buffer DrawCmdBuf {
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+} drawCmd;
+
+layout(push_constant) uniform PlaceParams {
+    vec4  camPosAndRadius;
+    uint  gridSize;
+    float bladeRadius;
+    uint  pad0;
+    uint  pad1;
+    vec4  frustumPlanes[6];
+} params;
+
+const uint kMaxBlades     = 512u * 512u;
+const uint kVertsPerBlade = 18u;
+
+uint HashUint (uint v) {
+    v ^= v >> 16u;
+    v *= 0x45d9f3bu;
+    v ^= v >> 16u;
+    return v;
+}
+
+float HashFloat (uvec2 seed) {
+    uint h = HashUint(seed.x) ^ HashUint(seed.y * 2654435761u);
+    h = HashUint(h);
+    return float(h) * (1.0 / 4294967296.0);
+}
+
+bool FrustumCull (vec3 center, float radius) {
+    for (int i = 0; i < 6; ++i) {
+        float dist = dot(params.frustumPlanes[i].xyz, center) + params.frustumPlanes[i].w;
+        if (dist < -radius) return true;
+    }
+    return false;
+}
+
+void main () {
+    uvec2 id       = gl_GlobalInvocationID.xy;
+    uint  gridSize = params.gridSize;
+
+    if (id.x == 0u && id.y == 0u) {
+        drawCmd.vertexCount   = kVertsPerBlade;
+        drawCmd.firstVertex   = 0u;
+        drawCmd.firstInstance = 0u;
+    }
+
+    if (id.x >= gridSize || id.y >= gridSize) return;
+
+    vec3  camPos = params.camPosAndRadius.xyz;
+    float radius = params.camPosAndRadius.w;
+
+    float cellSize  = (2.0 * radius) / float(gridSize);
+
+    vec2 gridOrigin = camPos.xz - vec2(radius);
+
+    vec2 cellCenter = gridOrigin + (vec2(id) + 0.5) * cellSize;
+
+    float jitterX = (HashFloat(id + uvec2(1337u,    0u)) - 0.5) * cellSize * 0.9;
+    float jitterZ = (HashFloat(id + uvec2(   0u, 7919u)) - 0.5) * cellSize * 0.9;
+    vec2  pos2d   = cellCenter + vec2(jitterX, jitterZ);
+
+    float rot   = HashFloat(uvec2(id.x ^ 0xDEADBEEFu, id.y)) * 6.28318530718;
+    float scale = 0.6 + HashFloat(uvec2(id.x, id.y ^ 0xC0FECAFEu)) * 0.8;
+
+    float dist = length(pos2d - camPos.xz);
+    float rng  = HashFloat(uvec2(id.x ^ 0x1234ABCDu, id.y ^ 0x5678EFu));
+    if (dist > 200.0 && rng > 0.25) return;
+    if (dist > 100.0 && rng > 0.50) return;
+
+    float bladeH      = scale * 1.5;
+    vec3  bladeCenter = vec3(pos2d.x, bladeH * 0.5, pos2d.y);
+    if (FrustumCull(bladeCenter, params.bladeRadius)) return;
+
+    uint slot = atomicAdd(drawCmd.instanceCount, 1u);
+    if (slot >= kMaxBlades) return;
+
+    instances[slot].posX     = pos2d.x;
+    instances[slot].posY     = 0.0;
+    instances[slot].posZ     = pos2d.y;
+    instances[slot].rotation = rot;
+    instances[slot].scale    = scale;
+    instances[slot].pad0     = 0.0;
+    instances[slot].pad1     = 0.0;
+    instances[slot].pad2     = 0.0;
+}

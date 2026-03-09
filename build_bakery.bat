@@ -1,0 +1,1 @@
+go build -o baker.exe .\tasks\model_bakery\baker\
