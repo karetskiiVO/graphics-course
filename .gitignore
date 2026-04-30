@@ -3,6 +3,7 @@ out
 build
 external
 .vs
+.idea
 .cache
 .vscode
 .idea

@@ -1,0 +1,3 @@
+import RenderCore;
+
+int main() {}
