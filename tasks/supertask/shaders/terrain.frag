@@ -6,6 +6,7 @@ layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inUV;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outNormal;
 
 layout(push_constant) uniform PushConstants {
     mat4 viewProj;
@@ -33,6 +34,10 @@ layout(set = 0, binding = 4) uniform sampler2D clipmapCascade0;
 layout(set = 0, binding = 5) uniform sampler2D clipmapCascade1;
 layout(set = 0, binding = 6) uniform sampler2D clipmapCascade2;
 layout(set = 0, binding = 7) uniform sampler2D clipmapCascade3;
+
+layout(set = 1, binding = 0) uniform ViewUBO {
+    mat4 view;
+} viewUBO;
 
 vec4 heightBlend(
     vec4 color0, float height0, float weight0,
@@ -169,4 +174,7 @@ void main () {
     vec3 finalColor = baseColor.rgb * (ambient + diffuse * 0.7) + vec3(spec);
 
     outColor = vec4(finalColor, 1.0);
+
+    vec3 viewNormal = normalize(mat3(viewUBO.view) * finalNormal);
+    outNormal = vec4(viewNormal * 0.5 + 0.5, 1.0);
 }

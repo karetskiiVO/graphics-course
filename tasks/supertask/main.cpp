@@ -9,6 +9,7 @@ import Engine;
 import Graphics;
 import TerrainRenderer;
 import FxaaRenderer;
+import SsaoRenderer;
 
 int main() {
     auto world = World();
@@ -25,6 +26,10 @@ int main() {
     terrainEntity.AddComponent<TransformComponent>();
     terrainEntity.AddComponent<TerrainRendererComponent>();
     terrainEntity.AddComponent<TerrainGuiComponent>();
+
+    auto& ssaoEntity = world.AddEntity("SSAO");
+    ssaoEntity.AddComponent<SsaoRendererComponent>();
+    ssaoEntity.AddComponent<SsaoGuiComponent>();
 
     auto& fxaaEntity = world.AddEntity("PostProcessing");
     fxaaEntity.AddComponent<FxaaRendererComponent>();

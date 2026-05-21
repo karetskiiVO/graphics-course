@@ -18,6 +18,7 @@ module;
 #include <etna/PipelineManager.hpp>
 #include <etna/ShaderProgram.hpp>
 #include <etna/Profiling.hpp>
+#include <etna/Buffer.hpp>
 #include <imgui.h>
 
 #include "wsi/OsWindowingManager.hpp"
@@ -195,7 +196,10 @@ public:
     std::optional<etna::Window::SwapchainImage> nextSwapchainImage;
 
     etna::Image sceneColorImage;
+    etna::Image sceneNormalsImage;
     etna::Image sceneDepthImage;
+
+    etna::Buffer viewMatrixBuffer;
 
     IPostProcessEffect* postProcessEffect = nullptr;
 
@@ -205,8 +209,13 @@ public:
 
     vk::Image GetSceneImage() const { return sceneColorImage.get(); }
     vk::ImageView GetSceneImageView() const { return sceneColorImage.getView({}); }
+    vk::Image GetSceneNormalsImage() const { return sceneNormalsImage.get(); }
+    vk::ImageView GetSceneNormalsImageView() const { return sceneNormalsImage.getView({}); }
     vk::Image GetSceneDepthImage() const { return sceneDepthImage.get(); }
     vk::ImageView GetSceneDepthImageView() const { return sceneDepthImage.getView({}); }
+
+    etna::Buffer& GetViewMatrixBuffer() { return viewMatrixBuffer; }
+    const etna::Buffer& GetViewMatrixBuffer() const { return viewMatrixBuffer; }
 
     void SetPostProcessEffect(IPostProcessEffect* effect) { postProcessEffect = effect; }
 
@@ -261,12 +270,29 @@ public:
             .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc,
         });
 
+        sceneNormalsImage = ctx.createImage(etna::Image::CreateInfo{
+            .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+            .name = "scene_normals",
+            .format = vk::Format::eR8G8B8A8Unorm,
+            .imageUsage = vk::ImageUsageFlagBits::eColorAttachment |
+                          vk::ImageUsageFlagBits::eSampled,
+        });
+
         sceneDepthImage = ctx.createImage(etna::Image::CreateInfo{
             .extent = vk::Extent3D{resolution.x, resolution.y, 1},
             .name = "scene_depth",
             .format = vk::Format::eD32Sfloat,
-            .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+            .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment |
+                          vk::ImageUsageFlagBits::eSampled,
         });
+
+        viewMatrixBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+            .size = sizeof(glm::mat4),
+            .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+            .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+            .name = "view_matrix_ubo",
+        });
+        viewMatrixBuffer.map();
     }
 
     void PreRender() override {

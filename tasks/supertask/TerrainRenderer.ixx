@@ -6,6 +6,7 @@ module;
 #include <etna/GraphicsPipeline.hpp>
 #include <glm/glm.hpp>
 #include <memory>
+#include <cstring>
 
 #include "wsi/Keyboard.hpp"
 #include <function2/function2.hpp>
@@ -95,7 +96,7 @@ public:
                     .lineWidth = 1.f,
                 },
                 .fragmentShaderOutput = {
-                    .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm},
+                    .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm, vk::Format::eR8G8B8A8Unorm},
                     .depthAttachmentFormat = vk::Format::eD32Sfloat,
                 },
             }
@@ -148,7 +149,7 @@ public:
                         .lineWidth = 1.f,
                     },
                     .fragmentShaderOutput = {
-                        .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm},
+                        .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm, vk::Format::eR8G8B8A8Unorm},
                         .depthAttachmentFormat = vk::Format::eD32Sfloat,
                     },
                 }
@@ -243,6 +244,8 @@ public:
 
         auto sceneImage = system->GetSceneImage();
         auto sceneImageView = system->GetSceneImageView();
+        auto sceneNormals = system->GetSceneNormalsImage();
+        auto sceneNormalsView = system->GetSceneNormalsImageView();
         auto sceneDepth = system->GetSceneDepthImage();
         auto sceneDepthView = system->GetSceneDepthImageView();
 
@@ -254,13 +257,28 @@ public:
         if (!cameraComponent) return;
 
         cameraPos = cameraComponent->mainCam.position;
-        auto aspect = float(resolution.x) / float(resolution.y);
-        viewProj = cameraComponent->mainCam.projTm(aspect) * cameraComponent->mainCam.viewTm();
+        const float aspect = float(resolution.x) / float(resolution.y);
+        glm::mat4 viewMatrix = cameraComponent->mainCam.viewTm();
+        viewProj = cameraComponent->mainCam.projTm(aspect) * viewMatrix;
+
+        std::memcpy(system->GetViewMatrixBuffer().data(), &viewMatrix, sizeof(glm::mat4));
 
         if (useClipmap) updateClipmapCascades(cmdBuf);
 
         {
             ETNA_PROFILE_GPU(cmdBuf, renderTerrain);
+
+            etna::RenderTargetState renderTargets(
+                cmdBuf,
+                {{0, 0}, {resolution.x, resolution.y}},
+                {
+                    {.image = sceneImage, .view = sceneImageView},
+                    {.image = sceneNormals, .view = sceneNormalsView},
+                },
+                {.image = sceneDepth, .view = sceneDepthView}
+            );
+
+            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
 
             auto terrainShaderInfo = etna::get_shader_program("terrain");
 
@@ -274,28 +292,25 @@ public:
                 bindings.push_back(etna::Binding{4 + i, clipmapCascades[i].genBinding(clipmapSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)});
             }
 
-            auto descriptorSet = etna::create_descriptor_set(
+            auto descriptorSet0 = etna::create_descriptor_set(
                 terrainShaderInfo.getDescriptorLayoutId(0),
                 cmdBuf,
                 bindings
             );
 
-            etna::flush_barriers(cmdBuf);
-
-            etna::RenderTargetState renderTargets(
+            auto descriptorSet1 = etna::create_descriptor_set(
+                terrainShaderInfo.getDescriptorLayoutId(1),
                 cmdBuf,
-                {{0, 0}, {resolution.x, resolution.y}},
-                {{.image = sceneImage, .view = sceneImageView}},
-                {.image = sceneDepth, .view = sceneDepthView}
+                {
+                    etna::Binding{0, system->GetViewMatrixBuffer().genBinding()},
+                }
             );
-
-            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
 
             cmdBuf.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
                 terrainPipeline.getVkPipelineLayout(),
                 0,
-                {descriptorSet.getVkSet()},
+                {descriptorSet0.getVkSet(), descriptorSet1.getVkSet()},
                 {}
             );
 
