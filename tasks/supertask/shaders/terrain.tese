@@ -11,6 +11,14 @@ layout(push_constant) uniform PushConstants {
     vec2 chunkOffset;
     float chunkSize;
     float tessellationFactor;
+    float terrainSize;
+    float detailTiling;
+    float useClipmap;
+    float clipmapBaseSize;
+    float clipmapCascadeCount;
+    float clipmapCenterX;
+    float clipmapCenterZ;
+    float padding;
 } pc;
 
 layout(location = 0) in vec4 inPosition[];
@@ -29,9 +37,7 @@ void main () {
     vec3 p1 = mix(inPosition[2].xyz, inPosition[3].xyz, u);
     vec3 worldPos = mix(p0, p1, v);
 
-    float terrainSize = pc.chunkSize * 8.0;
-    
-    vec2 uv = worldPos.xz / terrainSize + 0.5;
+    vec2 uv = worldPos.xz / pc.terrainSize + 0.5;
     outUV = uv;
 
     float height = texture(heightMap, uv).r;
@@ -45,8 +51,8 @@ void main () {
     float heightD = texture(heightMap, uv + vec2(0.0, -texelSize)).r * pc.heightScale;
     float heightU = texture(heightMap, uv + vec2(0.0, texelSize)).r * pc.heightScale;
 
-    vec3 tangentX = normalize(vec3(2.0 * texelSize * terrainSize, heightR - heightL, 0.0));
-    vec3 tangentZ = normalize(vec3(0.0, heightU - heightD, 2.0 * texelSize * terrainSize));
+    vec3 tangentX = normalize(vec3(2.0 * texelSize * pc.terrainSize, heightR - heightL, 0.0));
+    vec3 tangentZ = normalize(vec3(0.0, heightU - heightD, 2.0 * texelSize * pc.terrainSize));
 
     outNormal = normalize(cross(tangentZ, tangentX));
 

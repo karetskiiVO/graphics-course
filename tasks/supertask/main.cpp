@@ -10,20 +10,20 @@ import Graphics;
 import TerrainRenderer;
 
 int main() {
-  auto world = World();
+    auto world = World();
 
-  world.AddSystem<TimeSystem>();
-  world.AddSystem<EtnaRenderSystem>();
+    world.AddSystem<TimeSystem>();
+    world.AddSystem<EtnaRenderSystem>();
 
-  auto& cameraEntity = world.AddEntity("MainCamera");
-  cameraEntity.AddComponent<TransformComponent>();
-  cameraEntity.AddComponent<CameraComponent>();
-  cameraEntity.AddComponent<CameraControllerComponent>();
+    auto& cameraEntity = world.AddEntity("MainCamera");
+    cameraEntity.AddComponent<TransformComponent>();
+    cameraEntity.AddComponent<CameraComponent>();
+    cameraEntity.AddComponent<CameraControllerComponent>();
 
-  auto& terrainEntity = world.AddEntity("Terrain");
-  terrainEntity.AddComponent<TransformComponent>();
-  terrainEntity.AddComponent<TerrainRendererComponent>();
-  terrainEntity.AddComponent<TerrainGuiComponent>();
+    auto& terrainEntity = world.AddEntity("Terrain");
+    terrainEntity.AddComponent<TransformComponent>();
+    terrainEntity.AddComponent<TerrainRendererComponent>();
+    terrainEntity.AddComponent<TerrainGuiComponent>();
 
-  world.Run();
+    world.Run();
 }

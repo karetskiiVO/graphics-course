@@ -70,7 +70,7 @@ public:
         for (const auto& sourcePath : sourcePaths) {
             std::filesystem::path src(sourcePath);
             std::filesystem::path spv = sourcePath + ".spv";
-            
+
             bool needsCompile = false;
             needsCompile |= !std::filesystem::exists(spv);
             needsCompile |= std::filesystem::exists(src) && std::filesystem::last_write_time(src) > std::filesystem::last_write_time(spv);
@@ -82,7 +82,7 @@ public:
             }
             spvPaths.push_back(spv);
         }
-        
+
         if (etna::get_program_id(resourceName.c_str()) == etna::ShaderProgramId::Invalid) {
             etna::get_context().getShaderManager().loadProgram(resourceName.c_str(), spvPaths);
         }
@@ -131,7 +131,6 @@ public:
     }
 
     ShaderDispatcher& BbindSampler(uint32_t /*set*/, uint32_t /*binding*/, vk::Sampler /*sampler*/) {
-        // В будущем тут будет логика биндинга (сохранение для Dispatch)
         return *this;
     }
 
@@ -149,7 +148,6 @@ public:
     }
 
     void Dispatch() override {
-        // Логика диспатча шейдера/рендер-пасса с использованием сконфигурированных настроек
     }
 
     template <CDispatcher Dispatcher>
@@ -179,7 +177,7 @@ public:
 
     glm::uvec2 resolution = {1280, 720};
     bool useVsync = true;
-    
+
     vk::CommandBuffer currentCmdBuf{};
     vk::Image targetImage{};
     vk::ImageView targetImageView{};
@@ -230,10 +228,8 @@ public:
 
     void PreRender() override {
         windowing.poll();
-        if (mainWindow->isBeingClosed()) {
-            std::exit(0);
-        }
-        
+        if (mainWindow->isBeingClosed()) std::exit(0);
+
         auto cmdBuf = commandManager->acquireNext();
         etna::begin_frame();
 
@@ -259,7 +255,6 @@ public:
         ETNA_CHECK_VK_RESULT(etna::get_context().getDevice().waitIdle());
     }
 
-    // Declared here, defined below classes
     void Render() override;
 };
 
@@ -328,7 +323,7 @@ public:
 
 void EtnaRenderSystem::Render() {
     ZoneScoped;
-    
+
     if (!nextSwapchainImage) {
         if (windowing.getTime() >= 0) { // arbitrary validation to prevent missing width bounds
             auto [w, h] = etnaWindow->recreateSwapchain(etna::Window::DesiredProperties{

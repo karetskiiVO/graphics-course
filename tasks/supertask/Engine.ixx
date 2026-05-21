@@ -38,9 +38,11 @@ public:
         private:
             // methods for chaining
             void EntityUpdate() {
-                if (started) return;
-                started = true;
-                Start();
+                if (!started) {
+                    started = true;
+                    Start();
+                }
+                Update();
             }
             void EntityLateUpdate() { LateUpdate(); }
             void EntityPreRender()  { PreRender(); }
@@ -125,9 +127,11 @@ public:
         friend class World;
     private:
         void WorldUpdate() {
-            if (started) return;
-            started = true;
-            Start();
+            if (!started) {
+                started = true;
+                Start();
+            }
+            Update();
         }
         void WorldLateUpdate() { LateUpdate(); }
         void WorldPreRender()  { PreRender(); }

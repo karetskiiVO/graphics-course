@@ -20,4 +20,6 @@ target_add_shaders(supertask
   shaders/terrain.tesc
   shaders/terrain.tese
   shaders/terrain.frag
+  shaders/clipmap_splat.vert
+  shaders/clipmap_splat.frag
 )

@@ -4,11 +4,13 @@ module;
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <cstring>
 
 #include <glm/glm.hpp>
 #include <etna/Image.hpp>
 #include <etna/BlockingTransferHelper.hpp>
 #include <etna/GlobalContext.hpp>
+#include <stb_image.h>
 
 export module TerrainGenerator;
 
@@ -17,14 +19,16 @@ public:
     TerrainGenerator ();
 
     etna::Image GenerateHeightMap (uint32_t width, uint32_t height, int octaves = 6);
+    etna::Image GenerateSplatMap (uint32_t width, uint32_t height, int octaves = 6);
+    etna::Image GenerateDetailTextures (uint32_t size);
+    etna::Image GenerateDetailNormalMaps (uint32_t size);
 
 private:
     float PerlinNoise (float x, float y) const;
+    float FbmNoise (float x, float y, int octaves, float lacunarity = 2.0f, float gain = 0.5f) const;
 
     float Fade (float t) const;
-
     float Lerp (float t, float a, float b) const;
-
     float Grad (int hash, float x, float y) const;
 
     std::vector<int> permutation;
@@ -55,52 +59,69 @@ float TerrainGenerator::Fade (float t) const { return t * t * t * (t * (t * 6 - 
 float TerrainGenerator::Lerp (float t, float a, float b) const { return a + t * (b - a); }
 
 float TerrainGenerator::Grad (int hash, float x, float y) const {
-    int h = hash & 15;
-    float u = h < 8 ? x : y;
-    float v = h < 4 ? y : (h == 12 || h == 14 ? x : 0);
+    auto h = hash & 15;
+    auto u = h < 8 ? x : y;
+    auto v = h < 4 ? y : (h == 12 || h == 14 ? x : 0);
     return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
 }
 
 float TerrainGenerator::PerlinNoise (float x, float y) const {
-    int X = static_cast<int>(std::floor(x)) & 255;
-    int Y = static_cast<int>(std::floor(y)) & 255;
+    auto X = static_cast<int>(std::floor(x)) & 255;
+    auto Y = static_cast<int>(std::floor(y)) & 255;
 
     x -= std::floor(x);
     y -= std::floor(y);
 
-    float u = Fade(x);
-    float v = Fade(y);
+    auto u = Fade(x);
+    auto v = Fade(y);
 
-    int A  = permutation[X] + Y;
-    int AA = permutation[A];
-    int AB = permutation[A + 1];
-    int B  = permutation[X + 1] + Y;
-    int BA = permutation[B];
-    int BB = permutation[B + 1];
+    auto A  = permutation[X] + Y;
+    auto AA = permutation[A];
+    auto AB = permutation[A + 1];
+    auto B  = permutation[X + 1] + Y;
+    auto BA = permutation[B];
+    auto BB = permutation[B + 1];
 
-    float res = Lerp(v, Lerp(u, Grad(permutation[AA], x, y), Grad(permutation[BA], x - 1, y)),
-                     Lerp(u, Grad(permutation[AB], x, y - 1), Grad(permutation[BB], x - 1, y - 1)));
+    float res = Lerp(
+        v,
+        Lerp(u, Grad(permutation[AA], x, y), Grad(permutation[BA], x - 1, y)),
+        Lerp(u, Grad(permutation[AB], x, y - 1), Grad(permutation[BB], x - 1, y - 1))
+    );
 
     return res;
+}
+
+float TerrainGenerator::FbmNoise (float x, float y, int octaves, float lacunarity, float gain) const {
+    auto amplitude = 1.0f;
+    auto frequency = 1.0f;
+    auto value = 0.0f;
+
+    for (int i = 0; i < octaves; ++i) {
+        value += PerlinNoise(x * frequency, y * frequency) * amplitude;
+        amplitude *= gain;
+        frequency *= lacunarity;
+    }
+
+    return value;
 }
 
 etna::Image TerrainGenerator::GenerateHeightMap (uint32_t width, uint32_t height, int octaves) {
     std::vector<float> heights(width * height);
 
-    float maxHeight = 0.0f;
-    float minHeight = 0.0f;
+    auto maxHeight = 0.0f;
+    auto minHeight = 0.0f;
 
     for (uint32_t y = 0; y < height; ++y) {
         for (uint32_t x = 0; x < width; ++x) {
-            float amplitude = 1.0f;
-            float frequency = 1.0f;
-            float noiseValue = 0.0f;
+            auto amplitude = 1.0f;
+            auto frequency = 1.0f;
+            auto noiseValue = 0.0f;
 
             for (int octave = 0; octave < octaves; ++octave) {
-                float sampleX = x / static_cast<float>(width) * frequency * 8.0f;
-                float sampleY = y / static_cast<float>(height) * frequency * 8.0f;
+                auto sampleX = x / static_cast<float>(width) * frequency * 8.0f;
+                auto sampleY = y / static_cast<float>(height) * frequency * 8.0f;
 
-                float perlin = PerlinNoise(sampleX, sampleY);
+                auto perlin = PerlinNoise(sampleX, sampleY);
                 noiseValue += perlin * amplitude;
 
                 amplitude *= 0.5f;
@@ -141,4 +162,286 @@ etna::Image TerrainGenerator::GenerateHeightMap (uint32_t width, uint32_t height
     );
 
     return heightMap;
+}
+
+etna::Image TerrainGenerator::GenerateSplatMap (uint32_t width, uint32_t height, int octaves) {
+    std::vector<float> heights(width * height);
+    float maxHeight = 0.0f;
+    float minHeight = 0.0f;
+
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
+            float amplitude = 1.0f;
+            float frequency = 1.0f;
+            float noiseValue = 0.0f;
+
+            for (int octave = 0; octave < octaves; ++octave) {
+                float sampleX = x / static_cast<float>(width) * frequency * 8.0f;
+                float sampleY = y / static_cast<float>(height) * frequency * 8.0f;
+
+                float perlin = PerlinNoise(sampleX, sampleY);
+                noiseValue += perlin * amplitude;
+
+                amplitude *= 0.5f;
+                frequency *= 2.0f;
+            }
+
+            heights[y * width + x] = noiseValue;
+            maxHeight = std::max(maxHeight, noiseValue);
+            minHeight = std::min(minHeight, noiseValue);
+        }
+    }
+
+    for (auto& h: heights) { h = (h - minHeight) / (maxHeight - minHeight); }
+
+    struct RGBA8 { uint8_t r, g, b, a; };
+    std::vector<RGBA8> splatData(width * height);
+
+    for (uint32_t i = 0; i < width * height; ++i) {
+        float h = heights[i];
+
+        float px = static_cast<float>(i % width) / static_cast<float>(width);
+        float py = static_cast<float>(i / width) / static_cast<float>(height);
+        float noise = FbmNoise(px * 16.0f, py * 16.0f, 4) * 0.05f;
+
+        float hNoisy = h + noise;
+
+        float gravel = 0.0f, grass = 0.0f, rock = 0.0f, snow = 0.0f;
+        gravel = 1.0f - std::clamp((hNoisy - 0.20f) / 0.15f, 0.0f, 1.0f);
+
+        float grassUp = std::clamp((hNoisy - 0.15f) / 0.15f, 0.0f, 1.0f);
+        float grassDown = 1.0f - std::clamp((hNoisy - 0.50f) / 0.15f, 0.0f, 1.0f);
+        grass = grassUp * grassDown;
+
+        float rockUp = std::clamp((hNoisy - 0.45f) / 0.15f, 0.0f, 1.0f);
+        float rockDown = 1.0f - std::clamp((hNoisy - 0.75f) / 0.15f, 0.0f, 1.0f);
+        rock = rockUp * rockDown;
+
+        snow = std::clamp((hNoisy - 0.70f) / 0.15f, 0.0f, 1.0f);
+
+        uint32_t xi = i % width;
+        uint32_t yi = i / width;
+        float slope = 0.0f;
+        if (xi > 0 && xi < width - 1 && yi > 0 && yi < height - 1) {
+            float dhdx = heights[yi * width + xi + 1] - heights[yi * width + xi - 1];
+            float dhdy = heights[(yi + 1) * width + xi] - heights[(yi - 1) * width + xi];
+            slope = std::sqrt(dhdx * dhdx + dhdy * dhdy) * 50.0f; // Scale factor
+            slope = std::clamp(slope, 0.0f, 1.0f);
+        }
+
+        rock = std::max(rock, slope * 0.8f);
+
+        float total = gravel + grass + rock + snow;
+        if (total > 0.001f) {
+            gravel /= total;
+            grass /= total;
+            rock /= total;
+            snow /= total;
+        }
+
+        splatData[i] = {
+            static_cast<uint8_t>(std::clamp(gravel * 255.0f, 0.0f, 255.0f)),
+            static_cast<uint8_t>(std::clamp(grass * 255.0f, 0.0f, 255.0f)),
+            static_cast<uint8_t>(std::clamp(rock * 255.0f, 0.0f, 255.0f)),
+            static_cast<uint8_t>(std::clamp(snow * 255.0f, 0.0f, 255.0f)),
+        };
+    }
+
+    auto& ctx = etna::get_context();
+
+    auto splatMap = ctx.createImage(etna::Image::CreateInfo{
+        .extent = vk::Extent3D{width, height, 1},
+        .name = "splat_map",
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+    });
+
+    std::unique_ptr<etna::OneShotCmdMgr> oneShotCmdMgr = ctx.createOneShotCmdMgr();
+    auto transferHelper = etna::BlockingTransferHelper{
+        etna::BlockingTransferHelper::CreateInfo{
+            .stagingSize = static_cast<std::uint64_t>(width * height * sizeof(RGBA8)),
+        }
+    };
+
+    transferHelper.uploadImage(
+        *oneShotCmdMgr,
+        splatMap,
+        0,
+        0,
+        std::span<const std::byte>(reinterpret_cast<const std::byte*>(splatData.data()),
+        width * height * sizeof(RGBA8))
+    );
+
+    return splatMap;
+}
+
+etna::Image TerrainGenerator::GenerateDetailTextures (uint32_t size) {
+    struct RGBA8 { uint8_t r, g, b, a; };
+
+    struct LayerFiles {
+        const char* albedo;
+        const char* height;
+    };
+
+    const LayerFiles layerFiles[4] = {
+        {GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/gravel/pebble-3.jpg",
+         GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/gravel/pebble-3-2.jpg"},
+        {GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/grass/grass-1.jpg",
+         GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/grass/grass-1-2.jpg"},
+        {GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/rock/slate-1.jpg",
+         GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/rock/slate-1-2.jpg"},
+        {GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/snow/snow-1-1.jpg",
+         GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/snow/snow-1-2.jpg"},
+    };
+
+    int w = 0, channels;
+    std::vector<stbi_uc*> albedos(4, nullptr);
+    std::vector<stbi_uc*> heights(4, nullptr);
+
+    for (uint32_t layer = 0; layer < 4; ++layer) {
+        int lw, lh;
+        albedos[layer] = stbi_load(layerFiles[layer].albedo, &lw, &lh, &channels, 4);
+        heights[layer] = stbi_load(layerFiles[layer].height, &lw, &lh, &channels, 4);
+
+        if (!albedos[layer] || !heights[layer]) {
+            for (uint32_t i = 0; i <= layer; ++i) {
+                if (albedos[i]) stbi_image_free(albedos[i]);
+                if (heights[i]) stbi_image_free(heights[i]);
+            }
+            throw std::runtime_error(
+                std::string("Failed to load detail textures for layer ") + std::to_string(layer)
+            );
+        }
+
+        if (layer == 0) w = lw;
+    }
+
+    size = static_cast<uint32_t>(w);
+    std::vector<RGBA8> allLayers(size * size * 4);
+
+    for (uint32_t layer = 0; layer < 4; ++layer) {
+        for (uint32_t i = 0; i < size * size; ++i) {
+            uint32_t idx = layer * size * size + i;
+            allLayers[idx] = {
+                albedos[layer][i * 4 + 0],
+                albedos[layer][i * 4 + 1],
+                albedos[layer][i * 4 + 2],
+                heights[layer][i * 4 + 0],
+            };
+        }
+    }
+
+    for (auto* p : albedos) stbi_image_free(p);
+    for (auto* p : heights) stbi_image_free(p);
+
+    auto& ctx = etna::get_context();
+
+    auto detailTex = ctx.createImage(etna::Image::CreateInfo{
+        .extent = vk::Extent3D{size, size, 1},
+        .name = "detail_textures",
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc,
+        .layers = 4,
+        .mipLevels = 1,
+    });
+
+    std::unique_ptr<etna::OneShotCmdMgr> oneShotCmdMgr = ctx.createOneShotCmdMgr();
+    auto transferHelper = etna::BlockingTransferHelper{
+        etna::BlockingTransferHelper::CreateInfo{
+            .stagingSize = static_cast<std::uint64_t>(size * size * sizeof(RGBA8) * 4),
+        }
+    };
+
+    for (uint32_t layer = 0; layer < 4; ++layer) {
+        const RGBA8* layerData = allLayers.data() + layer * size * size;
+        transferHelper.uploadImage(
+            *oneShotCmdMgr,
+            detailTex,
+            0,
+            layer,
+            std::span<const std::byte>(
+                reinterpret_cast<const std::byte*>(layerData),
+                size * size * sizeof(RGBA8)
+            )
+        );
+    }
+
+    return detailTex;
+}
+
+etna::Image TerrainGenerator::GenerateDetailNormalMaps (uint32_t size) {
+    struct RGBA8 { uint8_t r, g, b, a; };
+
+    const char* normalFiles[4] = {
+        GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/gravel/pebble-3-4.jpg",
+        GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/grass/grass-1-4.jpg",
+        GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/rock/slate-1-4.jpg",
+        GRAPHICS_COURSE_ROOT "/tasks/supertask/textures/snow/snow-1-3.jpg",
+    };
+
+    int channels;
+    int w = 0;
+    std::vector<stbi_uc*> normals(4, nullptr);
+
+    for (uint32_t layer = 0; layer < 4; ++layer) {
+        int lw, lh;
+        normals[layer] = stbi_load(normalFiles[layer], &lw, &lh, &channels, 4);
+        if (!normals[layer]) {
+            for (uint32_t i = 0; i <= layer; ++i) if (normals[i]) stbi_image_free(normals[i]);
+            throw std::runtime_error(
+                std::string("Failed to load detail normal map for layer ") + std::to_string(layer)
+            );
+        }
+        if (layer == 0) w = lw;
+    }
+
+    size = static_cast<uint32_t>(w);
+    std::vector<RGBA8> allLayers(size * size * 4);
+
+    for (uint32_t layer = 0; layer < 4; ++layer) {
+        for (uint32_t i = 0; i < size * size; ++i) {
+            uint32_t idx = layer * size * size + i;
+            allLayers[idx] = {
+                normals[layer][i * 4 + 0],
+                normals[layer][i * 4 + 1],
+                normals[layer][i * 4 + 2],
+                255,
+            };
+        }
+    }
+
+    for (auto* p : normals) stbi_image_free(p);
+
+    auto& ctx = etna::get_context();
+
+    auto normalTex = ctx.createImage(etna::Image::CreateInfo{
+        .extent = vk::Extent3D{size, size, 1},
+        .name = "detail_normals",
+        .format = vk::Format::eR8G8B8A8Unorm,
+        .imageUsage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+        .layers = 4,
+    });
+
+    std::unique_ptr<etna::OneShotCmdMgr> oneShotCmdMgr = ctx.createOneShotCmdMgr();
+    auto transferHelper = etna::BlockingTransferHelper{
+        etna::BlockingTransferHelper::CreateInfo{
+            .stagingSize = static_cast<std::uint64_t>(size * size * sizeof(RGBA8) * 4),
+        }
+    };
+
+    for (uint32_t layer = 0; layer < 4; ++layer) {
+        const RGBA8* layerData = allLayers.data() + layer * size * size;
+        transferHelper.uploadImage(
+            *oneShotCmdMgr,
+            normalTex,
+            0,
+            layer,
+            std::span<const std::byte>(
+                reinterpret_cast<const std::byte*>(layerData),
+                size * size * sizeof(RGBA8)
+            )
+        );
+    }
+
+    return normalTex;
 }

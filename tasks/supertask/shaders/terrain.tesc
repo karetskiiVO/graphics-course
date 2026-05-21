@@ -10,6 +10,14 @@ layout(push_constant) uniform PushConstants {
     vec2 chunkOffset;
     float chunkSize;
     float tessellationFactor;
+    float terrainSize;
+    float detailTiling;
+    float useClipmap;
+    float clipmapBaseSize;
+    float clipmapCascadeCount;
+    float clipmapCenterX;
+    float clipmapCenterZ;
+    float padding;
 } pc;
 
 layout(location = 0) in vec4 inPosition[];
