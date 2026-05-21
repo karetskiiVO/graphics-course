@@ -3,6 +3,7 @@ add_executable(supertask
         Graphics.ixx
         TerrainGenerator.ixx
         TerrainRenderer.ixx
+        FxaaRenderer.ixx
 )
 
 set_target_properties(supertask PROPERTIES
@@ -10,7 +11,7 @@ set_target_properties(supertask PROPERTIES
         CXX_SCAN_FOR_MODULES ON)
 
 target_sources(supertask
-        PUBLIC FILE_SET CXX_MODULES FILES Engine.ixx Graphics.ixx TerrainGenerator.ixx TerrainRenderer.ixx)
+        PUBLIC FILE_SET CXX_MODULES FILES Engine.ixx Graphics.ixx TerrainGenerator.ixx TerrainRenderer.ixx FxaaRenderer.ixx)
 
 target_link_libraries(supertask
         PRIVATE glfw etna glm::glm wsi gui scene render_utils)
@@ -22,4 +23,6 @@ target_add_shaders(supertask
   shaders/terrain.frag
   shaders/clipmap_splat.vert
   shaders/clipmap_splat.frag
+  shaders/fxaa.vert
+  shaders/fxaa.frag
 )

@@ -35,14 +35,6 @@ public:
         resolution = system->resolution;
 
         auto& ctx = etna::get_context();
-        mainViewDepth = ctx.createImage(
-            etna::Image::CreateInfo{
-                .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-                .name = "main_view_depth",
-                .format = vk::Format::eD32Sfloat,
-                .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-            }
-        );
 
         heightMap = terrainGen->GenerateHeightMap(4096, 4096, 6);
         splatMap = terrainGen->GenerateSplatMap(4096, 4096, 6);
@@ -103,7 +95,7 @@ public:
                     .lineWidth = 1.f,
                 },
                 .fragmentShaderOutput = {
-                    .colorAttachmentFormats = {system->etnaWindow->getCurrentFormat()},
+                    .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm},
                     .depthAttachmentFormat = vk::Format::eD32Sfloat,
                 },
             }
@@ -156,7 +148,7 @@ public:
                         .lineWidth = 1.f,
                     },
                     .fragmentShaderOutput = {
-                        .colorAttachmentFormats = {system->etnaWindow->getCurrentFormat()},
+                        .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm},
                         .depthAttachmentFormat = vk::Format::eD32Sfloat,
                     },
                 }
@@ -246,12 +238,15 @@ public:
 
     void PreRender() override {
         auto system = GetOwner().GetWorld()->GetSystem<EtnaRenderSystem>();
-        auto cmd_buf = system->GetCurrentCmdBuf();
-        if (!cmd_buf) return;
-        auto target_image = system->GetTargetImage();
-        auto target_image_view = system->GetTargetImageView();
+        auto cmdBuf = system->GetCurrentCmdBuf();
+        if (!cmdBuf) return;
 
-        ETNA_PROFILE_GPU(cmd_buf, renderWorld);
+        auto sceneImage = system->GetSceneImage();
+        auto sceneImageView = system->GetSceneImageView();
+        auto sceneDepth = system->GetSceneDepthImage();
+        auto sceneDepthView = system->GetSceneDepthImageView();
+
+        ETNA_PROFILE_GPU(cmdBuf, renderWorld);
 
         auto cameraEntity = GetOwner().GetWorld()->GetEntity("MainCamera");
         if (!cameraEntity) return;
@@ -262,10 +257,10 @@ public:
         auto aspect = float(resolution.x) / float(resolution.y);
         viewProj = cameraComponent->mainCam.projTm(aspect) * cameraComponent->mainCam.viewTm();
 
-        if (useClipmap) updateClipmapCascades(cmd_buf);
+        if (useClipmap) updateClipmapCascades(cmdBuf);
 
         {
-            ETNA_PROFILE_GPU(cmd_buf, renderTerrain);
+            ETNA_PROFILE_GPU(cmdBuf, renderTerrain);
 
             auto terrainShaderInfo = etna::get_shader_program("terrain");
 
@@ -281,22 +276,22 @@ public:
 
             auto descriptorSet = etna::create_descriptor_set(
                 terrainShaderInfo.getDescriptorLayoutId(0),
-                cmd_buf,
+                cmdBuf,
                 bindings
             );
 
-            etna::flush_barriers(cmd_buf);
+            etna::flush_barriers(cmdBuf);
 
             etna::RenderTargetState renderTargets(
-                cmd_buf,
+                cmdBuf,
                 {{0, 0}, {resolution.x, resolution.y}},
-                {{.image = target_image, .view = target_image_view}},
-                {.image = mainViewDepth.get(), .view = mainViewDepth.getView({})}
+                {{.image = sceneImage, .view = sceneImageView}},
+                {.image = sceneDepth, .view = sceneDepthView}
             );
 
-            cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
+            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
 
-            cmd_buf.bindDescriptorSets(
+            cmdBuf.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
                 terrainPipeline.getVkPipelineLayout(),
                 0,
@@ -321,7 +316,7 @@ public:
                     pushConstants.clipmapCenterX = lastClipmapUpdatePos.x;
                     pushConstants.clipmapCenterZ = lastClipmapUpdatePos.z;
 
-                    cmd_buf.pushConstants<PushConstants>(
+                    cmdBuf.pushConstants<PushConstants>(
                         terrainPipeline.getVkPipelineLayout(),
                         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eTessellationControl |
                         vk::ShaderStageFlagBits::eTessellationEvaluation | vk::ShaderStageFlagBits::eFragment,
@@ -329,15 +324,14 @@ public:
                         {pushConstants}
                     );
 
-                    etna::flush_barriers(cmd_buf);
-                    cmd_buf.draw(4, 1, 0, 0);
+                    etna::flush_barriers(cmdBuf);
+                    cmdBuf.draw(4, 1, 0, 0);
                 }
             }
         }
     }
 
 public:
-    etna::Image mainViewDepth;
     etna::Image heightMap;
     etna::Image splatMap;
     etna::Image detailTextures;

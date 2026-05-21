@@ -8,6 +8,7 @@ using namespace std::string_view_literals;
 import Engine;
 import Graphics;
 import TerrainRenderer;
+import FxaaRenderer;
 
 int main() {
     auto world = World();
@@ -24,6 +25,10 @@ int main() {
     terrainEntity.AddComponent<TransformComponent>();
     terrainEntity.AddComponent<TerrainRendererComponent>();
     terrainEntity.AddComponent<TerrainGuiComponent>();
+
+    auto& fxaaEntity = world.AddEntity("PostProcessing");
+    fxaaEntity.AddComponent<FxaaRendererComponent>();
+    fxaaEntity.AddComponent<FxaaGuiComponent>();
 
     world.Run();
 }

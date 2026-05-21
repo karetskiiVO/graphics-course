@@ -167,6 +167,17 @@ inline ShaderDispatcher ShaderAsset::CreateDispatch() {
     return ShaderDispatcher(resourceName);
 }
 
+export class IPostProcessEffect {
+public:
+    virtual bool Apply(
+        vk::CommandBuffer cmdBuf,
+        const etna::Image& sceneImage, vk::ImageView sceneImageView,
+        vk::Image targetImage, vk::ImageView targetImageView,
+        glm::uvec2 resolution
+    ) = 0;
+    virtual ~IPostProcessEffect() {}
+};
+
 export class EtnaRenderSystem : public World::System {
 public:
     OsWindowingManager windowing;
@@ -183,9 +194,21 @@ public:
     vk::ImageView targetImageView{};
     std::optional<etna::Window::SwapchainImage> nextSwapchainImage;
 
+    etna::Image sceneColorImage;
+    etna::Image sceneDepthImage;
+
+    IPostProcessEffect* postProcessEffect = nullptr;
+
     vk::CommandBuffer GetCurrentCmdBuf() const { return currentCmdBuf; }
     vk::Image GetTargetImage() const { return targetImage; }
     vk::ImageView GetTargetImageView() const { return targetImageView; }
+
+    vk::Image GetSceneImage() const { return sceneColorImage.get(); }
+    vk::ImageView GetSceneImageView() const { return sceneColorImage.getView({}); }
+    vk::Image GetSceneDepthImage() const { return sceneDepthImage.get(); }
+    vk::ImageView GetSceneDepthImageView() const { return sceneDepthImage.getView({}); }
+
+    void SetPostProcessEffect(IPostProcessEffect* effect) { postProcessEffect = effect; }
 
     void Awake() override {
         mainWindow = windowing.createWindow(OsWindow::CreateInfo{.resolution = resolution,});
@@ -224,6 +247,26 @@ public:
 
         guiRenderer = std::make_unique<ImGuiRenderer>(etnaWindow->getCurrentFormat());
         ImGuiRenderer::enableImGuiForWindow(mainWindow->native());
+
+        createSceneRenderTargets();
+    }
+
+    void createSceneRenderTargets() {
+        auto& ctx = etna::get_context();
+
+        sceneColorImage = ctx.createImage(etna::Image::CreateInfo{
+            .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+            .name = "scene_color",
+            .format = vk::Format::eR8G8B8A8Unorm,
+            .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc,
+        });
+
+        sceneDepthImage = ctx.createImage(etna::Image::CreateInfo{
+            .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+            .name = "scene_depth",
+            .format = vk::Format::eD32Sfloat,
+            .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        });
     }
 
     void PreRender() override {
@@ -325,7 +368,7 @@ void EtnaRenderSystem::Render() {
     ZoneScoped;
 
     if (!nextSwapchainImage) {
-        if (windowing.getTime() >= 0) { // arbitrary validation to prevent missing width bounds
+        if (windowing.getTime() >= 0) {
             auto [w, h] = etnaWindow->recreateSwapchain(etna::Window::DesiredProperties{
                 .resolution = {resolution.x, resolution.y},
                 .vsync = useVsync,
@@ -347,6 +390,15 @@ void EtnaRenderSystem::Render() {
 
     {
         ETNA_PROFILE_GPU(cmdBuf, renderFrame);
+
+        if (postProcessEffect) {
+            postProcessEffect->Apply(
+                cmdBuf,
+                sceneColorImage, sceneColorImage.getView({}),
+                image, view,
+                resolution
+            );
+        }
 
         {
             ImDrawData* pDrawData = ImGui::GetDrawData();
@@ -376,7 +428,7 @@ void EtnaRenderSystem::Render() {
     const bool presented = etnaWindow->present(std::move(renderingDone), view);
     if (!presented) nextSwapchainImage = std::nullopt;
 
-    if (!nextSwapchainImage && windowing.getTime() >= 0) { // arbitrary validation to prevent missing width bounds
+    if (!nextSwapchainImage && windowing.getTime() >= 0) {
         auto [w, h] = etnaWindow->recreateSwapchain(etna::Window::DesiredProperties{
             .resolution = {resolution.x, resolution.y},
             .vsync = useVsync,
