@@ -10,6 +10,7 @@ layout(location = 0) in VS_OUT
     vec3 wNorm;
     vec2 texCoord;
     flat uint textureIndex;
+    flat vec4 baseColorFactor;
 } surf;
 
 layout(set = 1, binding = 0) uniform sampler2D textures[];
@@ -22,7 +23,7 @@ void main() {
     float diff = max(dot(surf.wNorm, lightDir), 0.0);
     float ambient = 0.05;
 
-    vec4 albedo = texture(textures[nonuniformEXT(surf.textureIndex)], surf.texCoord);
+    vec4 albedo = texture(textures[nonuniformEXT(surf.textureIndex)], surf.texCoord) * surf.baseColorFactor;
 
-    out_fragColor = vec4((diff * lightColor + ambient) * albedo.rgb, 1.0);
+    out_fragColor = vec4((diff * lightColor + ambient) * albedo.rgb, albedo.a);
 }

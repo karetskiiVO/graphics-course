@@ -47,6 +47,7 @@ private:
 
     struct DrawElementInfo {
         glm::mat4x4 model;
+        glm::vec4 baseColorFactor;
         std::uint32_t textureIndex;
         std::uint32_t pad0;
         std::uint32_t pad1;

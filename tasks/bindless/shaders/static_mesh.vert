@@ -10,13 +10,14 @@ layout(location = 1) in vec4 vTexCoordAndTangentAndPad;
 
 struct DrawElementInfo {
     mat4 model;
+    vec4 baseColorFactor;
     uint textureIndex;
     uint pad0;
     uint pad1;
     uint pad2;
 };
 
-layout(set = 0, binding = 0) readonly buffer DrawInfoBuf
+layout(std430, set = 0, binding = 0) readonly buffer DrawInfoBuf
 {
     DrawElementInfo drawInfos[];
 };
@@ -32,6 +33,7 @@ layout(location = 0) out VS_OUT
     vec3 wNorm;
     vec2 texCoord;
     flat uint textureIndex;
+    flat vec4 baseColorFactor;
 } vOut;
 
 out gl_PerVertex { vec4 gl_Position; };
@@ -49,6 +51,7 @@ void main() {
     vOut.wNorm = normalize(mat3(transpose(inverse(model))) * normal);
     vOut.texCoord = uv;
     vOut.textureIndex = drawInfos[drawId].textureIndex;
+    vOut.baseColorFactor = drawInfos[drawId].baseColorFactor;
 
     gl_Position = params.projView * vec4(vOut.wPos, 1.0);
 }

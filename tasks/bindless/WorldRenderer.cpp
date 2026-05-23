@@ -71,7 +71,7 @@ void WorldRenderer::CreateBindlessDescriptorSet () {
     std::vector<etna::Binding> bindings;
     for (std::uint32_t i = 0; i < sceneTextures.size(); ++i) {
         bindings.emplace_back(
-            0, 
+            0,
             sceneTextures[i].genBinding(sceneMgr->GetTextureSampler().get(), vk::ImageLayout::eShaderReadOnlyOptimal),
             i
         );
@@ -85,11 +85,12 @@ void WorldRenderer::CreateBindlessDescriptorSet () {
 }
 
 void WorldRenderer::BuildIndirectCommands () {
-    auto meshes           = sceneMgr->getMeshes();
-    auto relems           = sceneMgr->getRenderElements();
-    auto instanceMeshes   = sceneMgr->getInstanceMeshes();
-    auto relemTexIndices  = sceneMgr->GetRelemTextureIndices();
-    auto instanceMatrices = sceneMgr->getInstanceMatrices();
+    auto meshes                = sceneMgr->getMeshes();
+    auto relems                = sceneMgr->getRenderElements();
+    auto instanceMeshes        = sceneMgr->getInstanceMeshes();
+    auto relemTexIndices       = sceneMgr->GetRelemTextureIndices();
+    auto relemBaseColorFactors = sceneMgr->GetRelemBaseColorFactors();
+    auto instanceMatrices      = sceneMgr->getInstanceMatrices();
 
     std::vector<vk::DrawIndexedIndirectCommand> commands;
     std::vector<DrawElementInfo> drawInfos;
@@ -114,8 +115,12 @@ void WorldRenderer::BuildIndirectCommands () {
             if (relemIdx < relemTexIndices.size())
                 texIdx = relemTexIndices[relemIdx];
 
+            glm::vec4 baseColorFactor{1.0f};
+            if (relemIdx < relemBaseColorFactors.size()) baseColorFactor = relemBaseColorFactors[relemIdx];
+
             drawInfos.push_back(DrawElementInfo{
                 .model = instanceMatrices[instIdx],
+                .baseColorFactor = baseColorFactor,
                 .textureIndex = texIdx,
                 .pad0 = 0,
                 .pad1 = 0,
@@ -186,8 +191,6 @@ void WorldRenderer::RenderScene (vk::CommandBuffer cmdBuf, vk::PipelineLayout pi
         vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, {descriptorSet.getVkSet()}, {});
 
     if (bindlessSet.isValid()) {
-        bindlessSet.processBarriers(cmdBuf);
-        etna::flush_barriers(cmdBuf);
         cmdBuf.bindDescriptorSets(
             vk::PipelineBindPoint::eGraphics,
             pipelineLayout,
@@ -205,6 +208,11 @@ void WorldRenderer::RenderScene (vk::CommandBuffer cmdBuf, vk::PipelineLayout pi
 
 void WorldRenderer::RenderWorld (vk::CommandBuffer cmdBuf, vk::Image targetImage, vk::ImageView targetImageView) {
     ETNA_PROFILE_GPU(cmdBuf, renderWorld);
+
+    if (bindlessSet.isValid()) {
+        bindlessSet.processBarriers(cmdBuf);
+        etna::flush_barriers(cmdBuf);
+    }
 
     {
         ETNA_PROFILE_GPU(cmdBuf, renderForward);
