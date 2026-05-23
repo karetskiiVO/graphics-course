@@ -67,17 +67,7 @@ public:
         {
             ETNA_PROFILE_GPU(cmdBuf, ssaoCompute);
 
-            etna::RenderTargetState renderTargets(
-                cmdBuf,
-                {{0, 0}, {resolution.x, resolution.y}},
-                {{.image = ssaoImage.get(), .view = ssaoImage.getView({})}},
-                {}
-            );
-
-            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoPipeline.getVkPipeline());
-
             auto shaderInfo = etna::get_shader_program("ssao");
-
             auto descriptorSet = etna::create_descriptor_set(
                 shaderInfo.getDescriptorLayoutId(0),
                 cmdBuf,
@@ -88,6 +78,16 @@ public:
                     etna::Binding{3, kernelBuffer.genBinding()},
                 }
             );
+            etna::flush_barriers(cmdBuf);
+
+            etna::RenderTargetState renderTargets(
+                cmdBuf,
+                {{0, 0}, {resolution.x, resolution.y}},
+                {{.image = ssaoImage.get(), .view = ssaoImage.getView({})}},
+                {}
+            );
+
+            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoPipeline.getVkPipeline());
 
             cmdBuf.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
@@ -124,7 +124,7 @@ public:
 
             cmdBuf.pushConstants<SsaoPushConstants>(
                 ssaoPipeline.getVkPipelineLayout(),
-                vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                vk::ShaderStageFlagBits::eFragment,
                 0,
                 {pc}
             );
@@ -135,15 +135,6 @@ public:
         {
             ETNA_PROFILE_GPU(cmdBuf, ssaoBlur);
 
-            etna::RenderTargetState renderTargets(
-                cmdBuf,
-                {{0, 0}, {resolution.x, resolution.y}},
-                {{.image = ssaoBlurredImage.get(), .view = ssaoBlurredImage.getView({})}},
-                {}
-            );
-
-            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoBlurPipeline.getVkPipeline());
-
             auto shaderInfo = etna::get_shader_program("ssao_blur");
             auto descriptorSet = etna::create_descriptor_set(
                 shaderInfo.getDescriptorLayoutId(0),
@@ -153,6 +144,16 @@ public:
                     etna::Binding{1, system->sceneDepthImage.genBinding(nearestSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
                 }
             );
+            etna::flush_barriers(cmdBuf);
+
+            etna::RenderTargetState renderTargets(
+                cmdBuf,
+                {{0, 0}, {resolution.x, resolution.y}},
+                {{.image = ssaoBlurredImage.get(), .view = ssaoBlurredImage.getView({})}},
+                {}
+            );
+
+            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoBlurPipeline.getVkPipeline());
 
             cmdBuf.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
@@ -174,7 +175,7 @@ public:
 
             cmdBuf.pushConstants<BlurPushConstants>(
                 ssaoBlurPipeline.getVkPipelineLayout(),
-                vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                vk::ShaderStageFlagBits::eFragment,
                 0,
                 {blurPC}
             );
@@ -185,15 +186,6 @@ public:
         {
             ETNA_PROFILE_GPU(cmdBuf, ssaoApply);
 
-            etna::RenderTargetState renderTargets(
-                cmdBuf,
-                {{0, 0}, {resolution.x, resolution.y}},
-                {{.image = ssaoApplyImage.get(), .view = ssaoApplyImage.getView({})}},
-                {}
-            );
-
-            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoApplyPipeline.getVkPipeline());
-
             auto shaderInfo = etna::get_shader_program("ssao_apply");
             auto descriptorSet = etna::create_descriptor_set(
                 shaderInfo.getDescriptorLayoutId(0),
@@ -203,6 +195,16 @@ public:
                     etna::Binding{1, ssaoBlurredImage.genBinding(linearSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
                 }
             );
+            etna::flush_barriers(cmdBuf);
+
+            etna::RenderTargetState renderTargets(
+                cmdBuf,
+                {{0, 0}, {resolution.x, resolution.y}},
+                {{.image = ssaoApplyImage.get(), .view = ssaoApplyImage.getView({})}},
+                {}
+            );
+
+            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoApplyPipeline.getVkPipeline());
 
             cmdBuf.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
@@ -226,7 +228,7 @@ public:
 
             cmdBuf.pushConstants<ApplyPushConstants>(
                 ssaoApplyPipeline.getVkPipelineLayout(),
-                vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                vk::ShaderStageFlagBits::eFragment,
                 0,
                 {applyPC}
             );

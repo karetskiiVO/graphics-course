@@ -27,6 +27,17 @@ import TerrainGenerator;
 
 export class TerrainRendererComponent : public World::Entity::Component {
 public:
+    static vk::PipelineColorBlendAttachmentState defaultColorBlendAttachment() {
+        return vk::PipelineColorBlendAttachmentState{
+            .blendEnable = vk::False,
+            .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+        };
+    }
+
+    static std::vector<vk::PipelineColorBlendAttachmentState> terrainColorBlendAttachments() {
+        return {defaultColorBlendAttachment(), defaultColorBlendAttachment()};
+    }
+
     void Awake() override {
         terrainGen = std::make_unique<TerrainGenerator>();
     }
@@ -95,6 +106,9 @@ public:
                     .frontFace = vk::FrontFace::eCounterClockwise,
                     .lineWidth = 1.f,
                 },
+                .blendingConfig = {
+                    .attachments = terrainColorBlendAttachments(),
+                },
                 .fragmentShaderOutput = {
                     .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm, vk::Format::eR8G8B8A8Unorm},
                     .depthAttachmentFormat = vk::Format::eD32Sfloat,
@@ -147,6 +161,9 @@ public:
                         .cullMode = vk::CullModeFlagBits::eBack,
                         .frontFace = vk::FrontFace::eCounterClockwise,
                         .lineWidth = 1.f,
+                    },
+                    .blendingConfig = {
+                        .attachments = terrainColorBlendAttachments(),
                     },
                     .fragmentShaderOutput = {
                         .colorAttachmentFormats = {vk::Format::eR8G8B8A8Unorm, vk::Format::eR8G8B8A8Unorm},
@@ -268,18 +285,6 @@ public:
         {
             ETNA_PROFILE_GPU(cmdBuf, renderTerrain);
 
-            etna::RenderTargetState renderTargets(
-                cmdBuf,
-                {{0, 0}, {resolution.x, resolution.y}},
-                {
-                    {.image = sceneImage, .view = sceneImageView},
-                    {.image = sceneNormals, .view = sceneNormalsView},
-                },
-                {.image = sceneDepth, .view = sceneDepthView}
-            );
-
-            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
-
             auto terrainShaderInfo = etna::get_shader_program("terrain");
 
             std::vector<etna::Binding> bindings;
@@ -305,6 +310,20 @@ public:
                     etna::Binding{0, system->GetViewMatrixBuffer().genBinding()},
                 }
             );
+
+            etna::flush_barriers(cmdBuf);
+
+            etna::RenderTargetState renderTargets(
+                cmdBuf,
+                {{0, 0}, {resolution.x, resolution.y}},
+                {
+                    {.image = sceneImage, .view = sceneImageView},
+                    {.image = sceneNormals, .view = sceneNormalsView},
+                },
+                {.image = sceneDepth, .view = sceneDepthView}
+            );
+
+            cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, terrainPipeline.getVkPipeline());
 
             cmdBuf.bindDescriptorSets(
                 vk::PipelineBindPoint::eGraphics,
@@ -339,7 +358,6 @@ public:
                         {pushConstants}
                     );
 
-                    etna::flush_barriers(cmdBuf);
                     cmdBuf.draw(4, 1, 0, 0);
                 }
             }

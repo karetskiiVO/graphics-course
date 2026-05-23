@@ -267,7 +267,7 @@ public:
             .extent = vk::Extent3D{resolution.x, resolution.y, 1},
             .name = "scene_color",
             .format = vk::Format::eR8G8B8A8Unorm,
-            .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc,
+            .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst,
         });
 
         sceneNormalsImage = ctx.createImage(etna::Image::CreateInfo{
@@ -282,8 +282,7 @@ public:
             .extent = vk::Extent3D{resolution.x, resolution.y, 1},
             .name = "scene_depth",
             .format = vk::Format::eD32Sfloat,
-            .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment |
-                          vk::ImageUsageFlagBits::eSampled,
+            .imageUsage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled,
         });
 
         viewMatrixBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{

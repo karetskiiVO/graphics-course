@@ -30,10 +30,14 @@ vec3 viewPosFromDepth(vec2 uv, float depth) {
     return viewPos.xyz / viewPos.w;
 }
 
+bool isUvInside(vec2 uv) {
+    return all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
+}
+
 void main() {
     float depth = texture(depthTexture, inUV).r;
 
-    if (depth >= 1.0) {
+    if (depth >= 0.9999) {
         outOcclusion = 1.0;
         return;
     }
@@ -41,11 +45,19 @@ void main() {
     vec3 fragPos = viewPosFromDepth(inUV, depth);
     vec3 normal = texture(normalsTexture, inUV).rgb * 2.0 - 1.0;
     normal = normalize(normal);
+
     vec3 randomVec = normalize(texture(noiseTexture, inUV * pc.noiseScale).xyz * 2.0 - 1.0);
-    vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
-    vec3 bitangent = cross(normal, tangent);
+    vec3 tangent = randomVec - normal * dot(randomVec, normal);
+    if (dot(tangent, tangent) < 1e-5) {
+        tangent = normalize(abs(normal.z) < 0.999 ? cross(vec3(0.0, 0.0, 1.0), normal) : cross(vec3(0.0, 1.0, 0.0), normal));
+    } else {
+        tangent = normalize(tangent);
+    }
+    vec3 bitangent = normalize(cross(normal, tangent));
     mat3 TBN = mat3(tangent, bitangent, normal);
+
     float occlusion = 0.0;
+    float validSamples = 0.0;
     int sampleCount = min(pc.kernelSize, 64);
 
     for (int i = 0; i < sampleCount; ++i) {
@@ -53,17 +65,29 @@ void main() {
         vec3 samplePos = fragPos + sampleDir * pc.radius;
 
         vec4 offset = pc.projection * vec4(samplePos, 1.0);
+        if (offset.w <= 0.0) continue;
+
         offset.xyz /= offset.w;
         offset.xy = offset.xy * 0.5 + 0.5;
 
+        if (!isUvInside(offset.xy)) continue;
+
         float sampleDepth = texture(depthTexture, offset.xy).r;
+        if (sampleDepth >= 0.9999) continue;
+
         vec3 sampleViewPos = viewPosFromDepth(offset.xy, sampleDepth);
+        float sampleDistance = max(length(fragPos - sampleViewPos), 1e-4);
+        float rangeCheck = smoothstep(0.0, 1.0, pc.radius / sampleDistance);
 
-        float rangeCheck = smoothstep(0.0, 1.0, pc.radius / abs(fragPos.z - sampleViewPos.z));
-
-        occlusion += (sampleViewPos.z >= samplePos.z + pc.bias ? 1.0 : 0.0) * rangeCheck;
+        occlusion += (sampleViewPos.z <= samplePos.z - pc.bias ? 1.0 : 0.0) * rangeCheck;
+        validSamples += 1.0;
     }
 
-    occlusion = 1.0 - (occlusion / float(sampleCount));
-    outOcclusion = pow(occlusion, pc.power);
+    if (validSamples <= 0.0) {
+        outOcclusion = 1.0;
+        return;
+    }
+
+    occlusion = 1.0 - (occlusion / validSamples);
+    outOcclusion = pow(clamp(occlusion, 0.0, 1.0), pc.power);
 }

@@ -52,15 +52,6 @@ public:
     ) override {
         ETNA_PROFILE_GPU(cmdBuf, fxaaPass);
 
-        etna::RenderTargetState renderTargets(
-            cmdBuf,
-            {{0, 0}, {resolution.x, resolution.y}},
-            {{.image = targetImage, .view = targetImageView}},
-            {}
-        );
-
-        cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, fxaaPipeline.getVkPipeline());
-
         auto fxaaShaderInfo = etna::get_shader_program("fxaa");
         auto descriptorSet = etna::create_descriptor_set(
             fxaaShaderInfo.getDescriptorLayoutId(0),
@@ -69,6 +60,16 @@ public:
                 etna::Binding{0, sceneImage.genBinding(sceneSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
             }
         );
+        etna::flush_barriers(cmdBuf);
+
+        etna::RenderTargetState renderTargets(
+            cmdBuf,
+            {{0, 0}, {resolution.x, resolution.y}},
+            {{.image = targetImage, .view = targetImageView}},
+            {}
+        );
+
+        cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, fxaaPipeline.getVkPipeline());
 
         cmdBuf.bindDescriptorSets(
             vk::PipelineBindPoint::eGraphics,
@@ -87,7 +88,7 @@ public:
 
         cmdBuf.pushConstants<FxaaPushConstants>(
             fxaaPipeline.getVkPipelineLayout(),
-            vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+            vk::ShaderStageFlagBits::eFragment,
             0,
             {pc}
         );
