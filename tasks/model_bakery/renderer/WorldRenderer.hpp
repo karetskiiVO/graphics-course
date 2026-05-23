@@ -11,7 +11,6 @@
 
 #include "FramePacket.hpp"
 
-
 class WorldRenderer
 {
 public:

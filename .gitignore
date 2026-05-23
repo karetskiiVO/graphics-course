@@ -3,7 +3,9 @@ out
 build
 external
 .vs
+.idea
 .cache
 .vscode
+.idea
 CMakeSettings.json
 CMakeUserPresets.json
