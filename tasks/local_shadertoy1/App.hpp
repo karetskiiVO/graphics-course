@@ -8,24 +8,23 @@
 #include "wsi/OsWindowingManager.hpp"
 
 
-class App
-{
+class App {
 public:
-  App();
-  ~App();
+    App();
+    ~App();
 
-  void run();
-
-private:
-  void drawFrame();
+    void Run();
 
 private:
-  OsWindowingManager windowing;
-  std::unique_ptr<OsWindow> osWindow;
+    void DrawFrame();
 
-  glm::uvec2 resolution;
-  bool useVsync;
+private:
+    OsWindowingManager windowing;
+    std::unique_ptr<OsWindow> osWindow;
 
-  std::unique_ptr<etna::Window> vkWindow;
-  std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
+    glm::uvec2 resolution;
+    bool useVsync;
+
+    std::unique_ptr<etna::Window> vkWindow;
+    std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 };
