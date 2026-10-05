@@ -1,0 +1,6 @@
+target("model_bakery_baker")
+    set_kind("binary")
+    set_target_layout("tasks/model_bakery/baker")
+    add_files("main.cpp")
+    add_packages("tinygltf", {public = false})
+target_end()

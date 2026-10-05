@@ -1,0 +1,7 @@
+target("local_shadertoy1")
+    set_kind("binary")
+    set_target_layout("tasks/local_shadertoy1")
+    add_files("main.cpp", "App.cpp")
+    add_deps("wsi", "gui", "etna")
+    add_packages("glfw", "glm", "imgui", {public = false})
+    compile_shaders("shaders")

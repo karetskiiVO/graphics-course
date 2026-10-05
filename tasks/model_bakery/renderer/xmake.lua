@@ -1,0 +1,7 @@
+target("model_bakery_renderer")
+    set_kind("binary")
+    set_target_layout("tasks/model_bakery/renderer")
+    add_files("main.cpp", "App.cpp", "Renderer.cpp", "WorldRenderer.cpp")
+    add_deps("wsi", "gui", "scene", "render_utils", "etna")
+    add_packages("glfw", "glm", "imgui", {public = false})
+    compile_shaders("shaders")
