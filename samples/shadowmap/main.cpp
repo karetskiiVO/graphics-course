@@ -5,7 +5,7 @@ int main()
 {
   {
     App app;
-    app.run();
+    app.Run();
   }
 
   // Etna needs to be de-initialized after all resources allocated by app

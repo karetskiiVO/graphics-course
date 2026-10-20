@@ -79,10 +79,9 @@ rule("compile.glsl")
             end
         end
         local shader_output = path.join(target:values("output_dir"), "shaders")
-        local shader_define_output = path.translate(shader_output, "/")
+        local shader_define_output = shader_output:gsub("\\", "/")
         target:add("includedirs", path.join(os.projectdir(), "common", "render_utils", "shaders"), {public = false})
         target:add("defines", string.upper(target_name) .. "_SHADERS_ROOT=\"" .. shader_define_output .. "/\"")
-        target:add("before_build", function ()
         os.mkdir(shader_output)
         for _, shader in ipairs(shader_files) do
             local output = path.join(shader_output, path.filename(shader) .. ".spv")
@@ -92,8 +91,10 @@ rule("compile.glsl")
                 table.insert(args, 1, "-g")
             end
             os.execv("glslangValidator", args)
+            if not os.isfile(output) then
+                raise("glslangValidator did not create " .. output)
+            end
         end
-        end)
     end)
 rule_end()
 
