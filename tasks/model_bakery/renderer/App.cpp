@@ -24,7 +24,7 @@ App::App()
   renderer->loadScene(GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/low_poly_dark_town/scene.gltf");
 }
 
-void App::run()
+void App::Run()
 {
   double lastTime = windowing.getTime();
   while (!mainWindow->isBeingClosed())
@@ -37,7 +37,7 @@ void App::run()
 
     processInput(diffTime);
 
-    drawFrame();
+    DrawFrame();
 
     FrameMark;
   }
@@ -65,7 +65,7 @@ void App::processInput(float dt)
   renderer->debugInput(mainWindow->keyboard);
 }
 
-void App::drawFrame()
+void App::DrawFrame()
 {
   ZoneScoped;
 

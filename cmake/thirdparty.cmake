@@ -57,6 +57,13 @@ CPMAddPackage(
   VERSION 1.10.1
 )
 
+# Etna 1.10.1 ignores some results marked nodiscard by newer Vulkan-Hpp headers.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  target_compile_options(etna PRIVATE /wd4834)
+elseif(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  target_compile_options(etna PRIVATE -Wno-error=unused-result)
+endif()
+
 # Type-erased function containers that actually work
 CPMAddPackage(
   GITHUB_REPOSITORY Naios/function2
