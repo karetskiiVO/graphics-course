@@ -14,7 +14,7 @@ App::App()
     .refreshCb =
       [this]() {
         // NOTE: this is only called when the window is being resized.
-        drawFrame();
+        DrawFrame();
         FrameMark;
       },
     .resizeCb =
