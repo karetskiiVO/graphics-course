@@ -578,7 +578,7 @@ void App::DrawLighting(vk::CommandBuffer cmd, vk::Image backbuffer, vk::ImageVie
                 cmd,
                 lighting.inverseViewProjection,
                 gbuffer.albedoRoughness,
-                gbuffer.normalMaterial
+                gbuffer.normalMaterial,
                 depth,
                 gbufferSampler
             );
