@@ -11,13 +11,14 @@ define_property(TARGET PROPERTY INTERFACE_SHADER_INCLUDE_DIRECTORIES
   FULL_DOCS "Adds this include directories to all shaders of targets that depend on this one"
 )
 
-find_program(glslang_validator glslangValidator)
+find_program(glslang_validator NAMES glslangValidator glslang
+  HINTS "$ENV{VULKAN_SDK}/bin" "$ENV{VULKAN_SDK}/Bin"
+  REQUIRED)
 
 # Wokrs same way as target_include_directories, i.e. PUBLIC/PRIVATE/INTERFACE are supported
 function(target_shader_include_directories tgt)
-  list(POP_FRONT ${ARGN})
   set(current_type "PUBLIC")
-  foreach(arg ${ARGN})
+  foreach(arg IN LISTS ARGN)
     if("${arg}" STREQUAL "INTERFACE" OR "${arg}" STREQUAL "PUBLIC" OR "${arg}" STREQUAL "PRIVATE")
       set(current_type "${arg}")
       continue()
@@ -37,15 +38,13 @@ function(target_shader_include_directories tgt)
 endfunction()
 
 function(target_add_shaders tgt)
-  list(POP_FRONT ${ARGN})
-
   set(shader_binaries_dir "${CMAKE_CURRENT_BINARY_DIR}/shaders/")
 
   set(incl_dirs "$<TARGET_GENEX_EVAL:${tgt},$<TARGET_PROPERTY:${tgt},SHADER_INCLUDE_DIRECTORIES>>")
 
-  foreach(glsl_path ${ARGN})
+  foreach(glsl_path IN LISTS ARGN)
     set(input_path "${CMAKE_CURRENT_LIST_DIR}/${glsl_path}")
-    set(output_path "${shader_binaries_dir}/$<PATH:GET_FILENAME,${glsl_path}>.spv")
+    set(output_path "${shader_binaries_dir}$<PATH:GET_FILENAME,${glsl_path}>.spv")
     add_custom_command(
         OUTPUT ${output_path}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_binaries_dir}
@@ -75,7 +74,7 @@ function(target_add_shaders tgt)
 
     add_custom_target(${custom_target_name} DEPENDS ${SPIRV_BINARY_FILES})
     add_dependencies(${tgt} ${custom_target_name})
-    add_compile_definitions(${tgt}
+    target_compile_definitions(${tgt}
       PRIVATE $<UPPER_CASE:${tgt}>_SHADERS_ROOT="${shader_binaries_dir}")
   endif()
 endfunction()
